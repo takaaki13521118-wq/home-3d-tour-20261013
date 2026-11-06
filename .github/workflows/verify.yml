@@ -1,0 +1,33 @@
+name: Verify house app
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check scene, navigation and import logic
+        run: |
+          node --check main.js
+          node tests/core.test.mjs
+          node tests/joystick.test.mjs
+          node tests/plan.test.mjs
+          node tests/plan-import.test.mjs
+          node tests/runtime.test.mjs
+      - name: Install pinned PDF renderer for verification
+        run: npm install --prefix "$RUNNER_TEMP/pdf-test" --ignore-scripts --no-audit --no-fund pdfjs-dist@4.10.38 @napi-rs/canvas@0.1.68
+      - name: Render a real PDF and detect its walls
+        env:
+          PDF_TEST_ROOT: ${{ runner.temp }}/pdf-test
+        run: node tests/pdf-smoke.mjs
+      - name: Check hosted PDF library availability
+        run: |
+          curl --fail --retry 2 --max-time 40 -o "$RUNNER_TEMP/pdf.mjs" https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs
+          curl --fail --retry 2 --max-time 40 -o "$RUNNER_TEMP/pdf.worker.mjs" https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs
+          node --check "$RUNNER_TEMP/pdf.mjs"
+          node --check "$RUNNER_TEMP/pdf.worker.mjs"

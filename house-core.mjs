@@ -1,4 +1,6 @@
+import {validatePlanDesign} from './plan-core.mjs';
 export function validateDesign(v){
+ if(v?.version===2)return validatePlanDesign(v);
  if(!v||v.version!==1)throw Error('この形式のモデルは読み込めません。');
  const number=(key,min,max)=>{const n=v[key];if(typeof n!=='number'||!Number.isFinite(n)||n<min||n>max)throw Error(`${key} の値が範囲外です。`);return n;};
  const color=k=>{if(!/^#[0-9a-f]{6}$/i.test(v[k]||''))throw Error('色の指定が不正です。');return v[k];};
@@ -15,7 +17,7 @@ export function slideMove(x,z,dx,dz,allowed){const steps=Math.max(1,Math.ceil(Ma
 // Each history entry is a built model; null represents the supplied original house.
 export function createDesignHistory(limit=30){
  let entries=[null],index=0;
- const copy=v=>v===null?null:{...v};
+ const copy=v=>v===null?null:JSON.parse(JSON.stringify(v));
  return {
   push(value){const next=value===null?null:validateDesign(value);if(JSON.stringify(entries[index])===JSON.stringify(next))return;entries=entries.slice(0,index+1);entries.push(copy(next));if(entries.length>limit)entries.shift();index=entries.length-1;},
   undo(){if(index>0)index--;return copy(entries[index]);},
@@ -24,4 +26,4 @@ export function createDesignHistory(limit=30){
  };
 }
 export function designShareURL(href,design){return href.split('#')[0]+(design?'#design='+encodeURIComponent(JSON.stringify(validateDesign(design))):'');}
-export function interiorStartRoom(design){return design?'customLiving':'living';}
+export function interiorStartRoom(design){return design?(design.d?.version===2||design.version===2?'planWalk':'customLiving'):'living';}
