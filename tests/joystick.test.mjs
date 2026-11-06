@@ -32,3 +32,17 @@ for(const fps of [30,60,120]){
 }
 assert(Math.max(...samples)-Math.min(...samples)<1e-10);
 console.log('PASS: smooth start/stop/reversal, 30/60/120 Hz consistency, no touch-down jump, dual-stick independence, cancellation and reset');
+// Look-stick direction is tied to its visible centre, independent of touch-down position.
+for(const fps of [30,60,120]){
+ const responses=[];
+ for(const direction of [-1,1]){
+  const el=surface();let value;const c=bindJoystick(el,surface(),(x,y)=>value={x,y},()=>true,{centered:true,horizontalOnly:()=>true});
+  el.onpointerdown(event(1,50+direction*28,3));
+  for(let i=0;i<fps/5;i++)c.update(1/fps);
+  assert.equal(value.y,0);assert.equal(Math.sign(value.x),direction);responses.push(value.x);
+  el.onpointermove(event(1,50-direction*28,97));for(let i=0;i<fps/2;i++)c.update(1/fps);
+  assert.equal(Math.sign(value.x),-direction);assert.equal(value.y,0);
+ }
+ assert(Math.abs(responses[0]+responses[1])<1e-10);
+}
+console.log('PASS: centred look-stick left/right symmetry, vertical-jitter suppression and cross-centre reversal');

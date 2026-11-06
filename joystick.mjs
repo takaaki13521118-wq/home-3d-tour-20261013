@@ -5,7 +5,7 @@ export function stickVector(x,y,deadZone=.05){
  const strength=Math.pow((Math.min(1,length)-deadZone)/(1-deadZone),1.35);
  return {x:x/length*strength,y:y/length*strength};
 }
-export function bindJoystick(element,knob,onChange,isEnabled){
+export function bindJoystick(element,knob,onChange,isEnabled,options={}){
  let pointer=null,originX=0,originY=0,radius=38;
  let targetX=0,targetY=0,x=0,y=0;
  function release(){const previous=pointer;pointer=null;if(previous!==null&&element.hasPointerCapture?.(previous))element.releasePointerCapture(previous);}
@@ -18,17 +18,21 @@ export function bindJoystick(element,knob,onChange,isEnabled){
   onChange(x,y);
   knob.style.transform=(x||y)?`translate3d(${x*radius*.74}px,${y*radius*.74}px,0)`:'';
  }
+ function setTarget(e){
+  const horizontalOnly=options.horizontalOnly?.()===true;
+  const value=stickVector((e.clientX-originX)/radius,horizontalOnly?0:(e.clientY-originY)/radius);
+  targetX=value.x;targetY=value.y;
+ }
  element.onpointerdown=e=>{
   if(!isEnabled()||pointer!==null||(e.button!==undefined&&e.button!==0))return;
   e.preventDefault();reset();
   const r=element.getBoundingClientRect();radius=Math.max(1,Math.min(r.width,r.height)*.36);
-  // Starting away from the centre must not cause an immediate speed/heading jump.
-  originX=e.clientX;originY=e.clientY;pointer=e.pointerId;element.setPointerCapture(pointer);
+  // Walking uses a touch-relative origin; looking uses the visible centre for symmetric left/right response.
+  originX=options.centered?r.left+r.width/2:e.clientX;originY=options.centered?r.top+r.height/2:e.clientY;pointer=e.pointerId;element.setPointerCapture(pointer);if(options.centered)setTarget(e);
  };
  element.onpointermove=e=>{
   if(e.pointerId!==pointer)return;
-  const value=stickVector((e.clientX-originX)/radius,(e.clientY-originY)/radius);
-  targetX=value.x;targetY=value.y;
+  setTarget(e);
  };
  element.onpointerup=e=>{if(e.pointerId===pointer){targetX=targetY=0;release();}};
  element.onpointercancel=element.onlostpointercapture=e=>{if(e.pointerId===pointer)reset();};
