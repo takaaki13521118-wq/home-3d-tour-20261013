@@ -1,0 +1,19 @@
+// Scene and UI logic regression tests with real Three.js geometry.
+// Rendering and DOM are test doubles; this does not replace browser visual QA.
+import fs from 'node:fs';import {pathToFileURL} from 'node:url';
+const root=new URL('../',import.meta.url).pathname;
+const pre=`import * as realT from '${pathToFileURL(root+'vendor/three.module.js')}';
+class Element {constructor(){this.handlers={};this.style={};this.value='1.6';this.dataset={};this.innerHTML='';this.classList={add(){},remove(){},toggle(){return true}};}addEventListener(name,fn){this.handlers[name]=fn}setAttribute(){}setPointerCapture(){}append(){}replaceChildren(){}querySelectorAll(){return []}getBoundingClientRect(){return {left:0,top:0,width:1000,height:700}}getContext(){return {fillRect(){},beginPath(){},roundRect(){},fill(){},fillText(){},stroke(){},strokeRect(){},moveTo(){},lineTo(){}}}}
+const modes=['outside','cut','inside'].map(mode=>{const e=new Element();e.dataset.mode=mode;return e;});const elements=new Map();globalThis.document={querySelector(s){if(!elements.has(s))elements.set(s,new Element());return elements.get(s)},querySelectorAll(selector){return selector==='[data-mode]'?modes:[]},createElement(){return new Element()},body:{prepend(){}},addEventListener(){}};
+globalThis.window={addEventListener(){}};globalThis.location={hash:'',href:'https://example.test/',protocol:'https:'};globalThis.innerWidth=1000;globalThis.innerHeight=700;globalThis.devicePixelRatio=1;globalThis.matchMedia=()=>({matches:false});globalThis.requestAnimationFrame=()=>{};
+const T={...realT,WebGLRenderer:class{constructor(){this.domElement=new Element();this.shadowMap={}}setPixelRatio(){}setSize(){}render(){}getContext(){return {}}}};
+class OrbitControls{constructor(){this.target=new realT.Vector3()}update(){}}
+`;
+let code=fs.readFileSync(root+'main.js','utf8').replace("import * as T from 'three';",'').replace("import {OrbitControls} from './vendor/OrbitControls.js';",'').replace("'./house-core.mjs'",JSON.stringify(pathToFileURL(root+'house-core.mjs').href));
+code+=`\nconst base={version:1,name:'テスト',width:10,depth:9,height:2.6,bedrooms:2,ratio:.45,side:'north',roof:'shed',wall:'#778855',roofColor:'#aa7744'};for(const side of ['north','south'])for(const bedrooms of [1,2,3]){buildDesign({...base,side,bedrooms});for(const [id,v] of Object.entries(custom.views)){if(!allowed(v.p[0],v.p[2]))throw Error('Blocked spawn '+id);enter(id);}modes[2].onclick();if(mode!=='inside')throw Error('Custom interior mode failed');updateCurrentRoom();if(locatedRoom!=='customLiving')throw Error('Current room failed');setMode('outside');setMode('cut');}document.querySelector('#originalHouse').onclick();if(custom!==null||!shell.visible)throw Error('Restore failed');for(const [id,v] of Object.entries(roomViews)){if(!allowed(v.p[0],v.p[2]))throw Error('Original spawn blocked: '+id);}$('#undoDesign').onclick();if(!custom||custom.d.bedrooms!==3)throw Error('Undo restore failed');$('#redoDesign').onclick();if(custom)throw Error('Redo original failed');modes[2].onclick();if(mode!=='inside')throw Error('Original interior mode failed');
+const canvas=renderer.domElement;
+canvas.handlers.pointerdown({pointerId:1,clientX:0,clientY:0});canvas.handlers.pointerdown({pointerId:2,clientX:10,clientY:10});if(drag.id!==1)throw Error('Second touch hijacked camera');
+canvas.handlers.pointerup({pointerId:2});if(drag?.id!==1)throw Error('Second touch cancelled camera');canvas.handlers.pointermove({pointerId:1,clientX:20,clientY:0});if(drag.x!==20)throw Error('Look stopped');canvas.handlers.lostpointercapture({pointerId:1});if(drag)throw Error('Lost capture retained camera');
+if(!$('#saveDesign').disabled||!$('#exportDesign').disabled)throw Error('Original model exports draft');
+console.log('PASS: model geometry, room spawns, indoor mode, current room, undo/redo, multi-touch ownership and export state');`;
+await import('data:text/javascript;base64,'+Buffer.from(pre+code).toString('base64'));
