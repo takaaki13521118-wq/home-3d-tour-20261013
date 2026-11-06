@@ -1,4 +1,4 @@
-import {detectWalls,makePlanDesign,closestLine,addOpening} from './plan-core.mjs';
+import {detectWalls,makePlanDesign,closestLine,openParallelWalls} from './plan-core.mjs';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 export function setupPlanImport({onBuild,onOpen,onClose,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs')}){
  const $=s=>document.querySelector(s),dialog=$('#planDialog'),canvas=$('#planCanvas'),ctx=canvas.getContext('2d');
@@ -16,7 +16,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,loadPDF=()=>import(PDF_B
  }
  function clearEdits(){lines=[];undo=[];redo=[];pending=null;pointer=null;}
  function detect(){
-  const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.006),minStroke:$('#planThinLines').checked?1:2});
+  const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:$('#planThinLines').checked?1:2});
   history();lines=candidate;pending=null;draw();status(lines.length?'線を自動検出しました。寸法線や家具の線は削除し、実寸を設定して「3Dを作る」を押してください。':'壁の線が見つかりません。読み取り濃さを上げるか、「壁を追加」で補ってください。');
  }
  async function renderPage(){
@@ -57,7 +57,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,loadPDF=()=>import(PDF_B
   }else{
    const hit=closestLine(lines,p.x,p.y,Math.max(8,source.width/canvas.getBoundingClientRect().width*15));if(!hit){status('編集する線をタップしてください。');return;}
    if(tool==='erase'){history();lines.splice(hit.index,1);}
-   else if(tool==='door'||tool==='window'){const span=(tool==='door'?.9:1.6)*source.width/(+$('#planWidth').value||10);const replacement=addOpening(lines[hit.index],hit.t,span,tool);history();lines.splice(hit.index,1,...replacement);}
+   else if(tool==='door'||tool==='window'){const span=(tool==='door'?.9:1.6)*source.width/(+$('#planWidth').value||10);const replacement=openParallelWalls(lines,hit,span,tool,(+$('#planThickness').value||.12)*1.5*source.width/(+$('#planWidth').value||10));history();lines=replacement;}
   }
   draw();status('編集しました。赤い線が実際の壁に合うように調整してください。');
  }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {detectWalls,makePlanDesign,validatePlanDesign,planSpawn,planAllowed,closestLine,addOpening} from '../plan-core.mjs';
+import {detectWalls,makePlanDesign,validatePlanDesign,planSpawn,planAllowed,closestLine,addOpening,openParallelWalls} from '../plan-core.mjs';
 import {validateDesign,createDesignHistory,interiorStartRoom,designShareURL} from '../house-core.mjs';
 const width=240,height=180,data=new Uint8ClampedArray(width*height*4).fill(255);
 function rect(x,y,w,h){for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++){const p=(j*width+i)*4;data[p]=data[p+1]=data[p+2]=0;}}
@@ -17,3 +17,5 @@ const h=createDesignHistory();h.push(d);h.push({...d,name:'second'});const resto
 const shared=designShareURL('https://example.test/',d);assert.deepEqual(validateDesign(JSON.parse(decodeURIComponent(shared.split('#design=')[1]))),d);
 const empty=new Uint8ClampedArray(width*height*4).fill(255);assert.equal(detectWalls({width,height,data:empty}).length,0);assert.throws(()=>detectWalls({width,height,data},{minLength:0}));
 console.log('PASS: raster wall detection, noise rejection, dimensions, plan validation, safe spawn, openings, save/share and deep history');
+
+const paired=[{x1:0,y1:20,x2:200,y2:20,kind:'wall'},{x1:0,y1:25,x2:200,y2:25,kind:'wall'},{x1:0,y1:50,x2:200,y2:50,kind:'wall'}];const opened=openParallelWalls(paired,{index:0,t:.5},30,'door',8);assert.equal(opened.filter(l=>l.kind==='door').length,2);assert.equal(opened.at(-1).y1,50);console.log('PASS: paired wall outlines receive matching openings');
