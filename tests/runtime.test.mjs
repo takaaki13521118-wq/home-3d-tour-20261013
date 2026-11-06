@@ -9,11 +9,17 @@ globalThis.window={addEventListener(){}};globalThis.location={hash:'',href:'http
 const T={...realT,WebGLRenderer:class{constructor(){this.domElement=new Element();this.shadowMap={}}setPixelRatio(){}setSize(){}render(){}getContext(){return {}}}};
 class OrbitControls{constructor(){this.target=new realT.Vector3()}update(){}}
 `;
-let code=fs.readFileSync(root+'main.js','utf8').replace("import * as T from 'three';",'').replace("import {OrbitControls} from './vendor/OrbitControls.js';",'').replace("'./house-core.mjs'",JSON.stringify(pathToFileURL(root+'house-core.mjs').href));
+let code=fs.readFileSync(root+'main.js','utf8').replace("import * as T from 'three';",'').replace("import {OrbitControls} from './vendor/OrbitControls.js';",'').replace("'./house-core.mjs'",JSON.stringify(pathToFileURL(root+'house-core.mjs').href)).replace("'./joystick.mjs'",JSON.stringify(pathToFileURL(root+'joystick.mjs').href));
 code+=`\nconst base={version:1,name:'テスト',width:10,depth:9,height:2.6,bedrooms:2,ratio:.45,side:'north',roof:'shed',wall:'#778855',roofColor:'#aa7744'};for(const side of ['north','south'])for(const bedrooms of [1,2,3]){buildDesign({...base,side,bedrooms});for(const [id,v] of Object.entries(custom.views)){if(!allowed(v.p[0],v.p[2]))throw Error('Blocked spawn '+id);enter(id);}modes[2].onclick();if(mode!=='inside')throw Error('Custom interior mode failed');updateCurrentRoom();if(locatedRoom!=='customLiving')throw Error('Current room failed');setMode('outside');setMode('cut');}document.querySelector('#originalHouse').onclick();if(custom!==null||!shell.visible)throw Error('Restore failed');for(const [id,v] of Object.entries(roomViews)){if(!allowed(v.p[0],v.p[2]))throw Error('Original spawn blocked: '+id);}$('#undoDesign').onclick();if(!custom||custom.d.bedrooms!==3)throw Error('Undo restore failed');$('#redoDesign').onclick();if(custom)throw Error('Redo original failed');modes[2].onclick();if(mode!=='inside')throw Error('Original interior mode failed');
 const canvas=renderer.domElement;
 canvas.handlers.pointerdown({pointerId:1,clientX:0,clientY:0});canvas.handlers.pointerdown({pointerId:2,clientX:10,clientY:10});if(drag.id!==1)throw Error('Second touch hijacked camera');
 canvas.handlers.pointerup({pointerId:2});if(drag?.id!==1)throw Error('Second touch cancelled camera');canvas.handlers.pointermove({pointerId:1,clientX:20,clientY:0});if(drag.x!==20)throw Error('Look stopped');canvas.handlers.lostpointercapture({pointerId:1});if(drag)throw Error('Lost capture retained camera');
 if(!$('#saveDesign').disabled||!$('#exportDesign').disabled)throw Error('Original model exports draft');
+const beforeYaw=yaw,beforePitch=pitch;
+lookJoy.set(1,-1);joy.set(0,-1);updateStickLook(.1);if(yaw>=beforeYaw||pitch<=beforePitch||joy.y!==-1)throw Error('Walk/look independence or direction failed');
+for(let i=0;i<100;i++)updateStickLook(.1);if(pitch>1.3)throw Error('Pitch clamp failed');
+const turnYaw=yaw;$('#turnAround').onclick();if(Math.abs(yaw-turnYaw-Math.PI)>1e-8||pitch!==0||lookJoy.length()!==0||joy.length()!==0)throw Error('Turn around failed');
+lookJoy.set(1,1);joy.set(1,1);setMode('outside');if(lookJoy.length()||joy.length()||$('#lookControls').style.display!=='none')throw Error('Mode change retained stick input');
+console.log('PASS: dual-stick rotation, turn around, input reset');
 console.log('PASS: model geometry, room spawns, indoor mode, current room, undo/redo, multi-touch ownership and export state');`;
 await import('data:text/javascript;base64,'+Buffer.from(pre+code).toString('base64'));
