@@ -34,10 +34,10 @@ export function validatePlanDesign(v){
  if(!/^#[0-9a-f]{6}$/i.test(v.wall)||!['none','flat'].includes(v.roof))throw Error('外観の指定が不正です。');
  return {version:2,name:typeof v.name==='string'?v.name.slice(0,40):'図面から作成',width,depth,height,thickness:n(v.thickness,.06,.4),wall:v.wall,roof:v.roof,walls};
 }
-export function makePlanDesign(lines,pixelWidth,pixelHeight,{width=10,height=2.6,thickness=.12,name='図面から作成',roof='none',wall='#e9e4d8'}={}){
+export function makePlanDesign(lines,pixelWidth,pixelHeight,{width=10,depth:explicitDepth,height=2.6,thickness=.12,name='図面から作成',roof='none',wall='#e9e4d8'}={}){
  const s=width/pixelWidth,round=v=>Math.round(v*10000)/10000;
- const depth=round(pixelHeight*s);
- return validatePlanDesign({version:2,name,width,depth,height,thickness,wall,roof,walls:lines.map(l=>({x1:round((l.x1-pixelWidth/2)*s),x2:round((l.x2-pixelWidth/2)*s),z1:round((l.y1/pixelHeight-.5)*depth),z2:round((l.y2/pixelHeight-.5)*depth),kind:l.kind||'wall'}))});
+ const depth=explicitDepth??round(pixelHeight*s),bounded=(v,half)=>v < -half-1e-8 || v > half+1e-8 ? v : Math.max(-half,Math.min(half,round(v)));
+ return validatePlanDesign({version:2,name,width,depth,height,thickness,wall,roof,walls:lines.map(l=>({x1:bounded((l.x1-pixelWidth/2)*s,width/2),x2:bounded((l.x2-pixelWidth/2)*s,width/2),z1:bounded((l.y1/pixelHeight-.5)*depth,depth/2),z2:bounded((l.y2/pixelHeight-.5)*depth,depth/2),kind:l.kind||'wall'}))});
 }
 export function planSolids(d){return d.walls.filter(w=>w.kind!=='door').map(w=>({x:(w.x1+w.x2)/2,z:(w.z1+w.z2)/2,w:Math.hypot(w.x2-w.x1,w.z2-w.z1),d:d.thickness,angle:Math.atan2(w.z2-w.z1,w.x2-w.x1)}));}
 export function solidDistance(s,x,z){const c=Math.cos(s.angle||0),t=Math.sin(s.angle||0),dx=x-s.x,dz=z-s.z;return Math.hypot(Math.max(0,Math.abs(c*dx+t*dz)-s.w/2),Math.max(0,Math.abs(-t*dx+c*dz)-s.d/2));}
@@ -52,4 +52,14 @@ export function openParallelWalls(lines,hit,span,kind,tolerance){
  const chosen=lines[hit.index],x=chosen.x1+(chosen.x2-chosen.x1)*hit.t,y=chosen.y1+(chosen.y2-chosen.y1)*hit.t;
  const primary=addOpening(chosen,hit.t,span,kind);
  return lines.flatMap((l,i)=>{if(i===hit.index)return primary;if(l.kind!=='wall')return [l];const ax=chosen.x2-chosen.x1,ay=chosen.y2-chosen.y1,bx=l.x2-l.x1,by=l.y2-l.y1;if(Math.abs(ax*by-ay*bx)>Math.hypot(ax,ay)*Math.hypot(bx,by)*.01)return [l];const nearby=closestLine([l],x,y,tolerance);if(!nearby)return [l];try{return addOpening(l,nearby.t,span,kind);}catch{return [l];}});
+}
+
+// Recover editable vectors without rerasterising or discarding door/window types.
+export function planEditorSnapshot(input){
+ const design=validatePlanDesign(input),scale=1000/Math.max(design.width,design.depth);
+ const pixelWidth=Math.max(8,Math.round(design.width*scale)),pixelHeight=Math.max(8,Math.round(design.depth*scale));
+ return {design,pixelWidth,pixelHeight,lines:design.walls.map(w=>({x1:(w.x1/design.width+.5)*pixelWidth,y1:(w.z1/design.depth+.5)*pixelHeight,x2:(w.x2/design.width+.5)*pixelWidth,y2:(w.z2/design.depth+.5)*pixelHeight,kind:w.kind}))};
+}
+export function planSegmentMetres(a,b,pixelWidth,pixelHeight,width,depth=width*pixelHeight/pixelWidth){
+ return Math.hypot((b.x-a.x)*width/pixelWidth,(b.y-a.y)*depth/pixelHeight);
 }

@@ -1,6 +1,6 @@
 import {setupDesignLibrary} from './design-library-ui.mjs';
-import {setupPlanImport} from './plan-import.mjs?v=20261107-editor';
-import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261107-cad';
+import {setupPlanImport} from './plan-import.mjs?v=20261107-reedit';
+import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261107-reedit';
 import * as T from 'three';
 import {bindJoystick} from './joystick.mjs?v=20261107-level';
 import {validateDesign,layoutRooms,slideMove,createDesignHistory,designShareURL,interiorStartRoom} from './house-core.mjs?v=20261107-cad';
@@ -73,7 +73,7 @@ let planDialogOpen=false;
 let locatedRoom=null;
 function updateDesignUI(){
  $('#undoDesign').disabled=!designHistory.canUndo;$('#redoDesign').disabled=!designHistory.canRedo;
- $('#saveDesign').disabled=$('#exportDesign').disabled=!custom;
+ $('#saveDesign').disabled=$('#exportDesign').disabled=!custom;$('#editCurrentPlan').disabled=custom?.d.version!==2;
  $('#designState').textContent=custom?'表示中の案を保存・書き出します。':'現在は元の服部邸を表示しています。';
  $('#modelNote').textContent=custom?.d.version===2?'図面の線から作った概略モデルです。床・屋根は矩形の仮形状。窓・出入口は手動指定、部屋名・階数・屋根形状の自動判定には未対応です。':custom?'入力条件から作成した平屋の概略モデルです。寸法・家具・設備は参考イメージです。':'提供図面をもとにした簡易3Dモデルです。家具・質感・細部はイメージ。屋根色は立面図のオレンジを採用しています。';
  const summary=$('#areaSummary');summary.replaceChildren();
@@ -174,6 +174,6 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)resetInput(
 
 if(location.hash.startsWith('#design=')){try{const d=validateDesign(JSON.parse(decodeURIComponent(location.hash.slice(8))));fillDesign(d);buildDesign(d);}catch(e){showToast('共有モデルを読み込めませんでした。');}}
 
-setupPlanImport({onBuild:(d,{automatic=false}={})=>{buildDesign(d);showToast(automatic?'概略3Dを自動生成しました。メニューから壁線・実寸を確認できます。':'図面から3Dモデルを更新しました');},onOpen:()=>{planDialogOpen=true;resetInput();orbit.enabled=false;},onClose:()=>{planDialogOpen=false;resetInput();orbit.enabled=mode!=='inside';}});
+setupPlanImport({getDesign:()=>custom?.d,onBuild:(d,{automatic=false}={})=>{buildDesign(d);showToast(automatic?'概略3Dを自動生成しました。メニューから壁線・実寸を確認できます。':'図面から3Dモデルを更新しました');},onOpen:()=>{planDialogOpen=true;resetInput();orbit.enabled=false;},onClose:()=>{planDialogOpen=false;resetInput();orbit.enabled=mode!=='inside';}});
 
 setupDesignLibrary({getDesign:()=>custom?.d,onLoad:d=>{fillDesign(d);buildDesign(d);},onDownload:downloadDesign,notify:showToast,onOpen:()=>{planDialogOpen=true;resetInput();orbit.enabled=false;},onClose:()=>{planDialogOpen=false;resetInput();orbit.enabled=mode!=='inside';}});

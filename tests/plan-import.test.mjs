@@ -8,9 +8,9 @@ class Canvas extends Element{constructor(){super();this.width=240;this.height=18
 const elements=new Map();const $=s=>{if(!elements.has(s))elements.set(s,s==='#planCanvas'?new Canvas():new Element());return elements.get(s);};
 globalThis.document={querySelector:$,createElement:t=>t==='canvas'?new Canvas():new Element()};globalThis.Image=class{constructor(){this.naturalWidth=240;this.naturalHeight=180;this.data=pixels();}async decode(){}};
 for(const [id,value]of Object.entries({planWidth:'12',planHeight:'2.6',planThickness:'.12',planRoof:'none',planThreshold:'155',planMinLength:'24',planKnownLength:'5',planTool:'erase',planDoorWidth:'.9',planWindowWidth:'1.6'}))$('#'+id).value=value;
-let result,opened=0,closed=0;
+let result,opened=0,closed=0,currentDesign=null;
 const pdfLib={GlobalWorkerOptions:{},getDocument(){return {destroy:async()=>{},promise:Promise.resolve({numPages:2,getPage:async()=>({getViewport:()=>({width:240,height:180}),render({canvasContext}){canvasContext.drawImage({data:pixels()});return {promise:Promise.resolve(),cancel(){}};}})})};}};
-setupPlanImport({onBuild:d=>result=validateDesign(d),onOpen:()=>opened++,onClose:()=>closed++,loadPDF:async()=>pdfLib,loadCAD:async file=>({format:file.name.split('.').pop(),doc:{header:{$INSUNITS:4},entities:[{type:"LWPOLYLINE",layer:"Walls",shape:true,vertices:[{x:0,y:0},{x:8000,y:0},{x:8000,y:6000},{x:0,y:6000}]},{type:"LINE",layer:"Dims",vertices:[{x:0,y:-1000},{x:8000,y:-1000}]}]}})});
+setupPlanImport({getDesign:()=>currentDesign,onBuild:d=>result=validateDesign(d),onOpen:()=>opened++,onClose:()=>closed++,loadPDF:async()=>pdfLib,loadCAD:async file=>({format:file.name.split('.').pop(),doc:{header:{$INSUNITS:4},entities:[{type:"LWPOLYLINE",layer:"Walls",shape:true,vertices:[{x:0,y:0},{x:8000,y:0},{x:8000,y:6000},{x:0,y:6000}]},{type:"LINE",layer:"Dims",vertices:[{x:0,y:-1000},{x:8000,y:-1000}]}]}})});
 $('#openPlanImport').onclick();assert.equal(opened,1);assert.equal($('#planDialog').open,true);
 const file=new Blob(['fixture'],{type:'image/png'});file.name='平面図.png';
 await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal($('#planBuild').disabled,false);assert.match($('#planCount').textContent,/4 本/);
@@ -92,3 +92,19 @@ pdfLib.getDocument=()=>({destroy:async()=>{destroyed++;},promise:new Promise(res
 pendingLoad=$('#planFile').onchange({target:{files:[pdf],value:'file'}});await tick();$('#closePlanImport').onclick();$('#openPlanImport').onclick();finishDocument({numPages:99});await pendingLoad;assert.equal(destroyed,1);assert.equal(result,null);assert.equal($('#planPageRow').hidden,true);
 pdfLib.getDocument=validGetDocument;await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal(result?.version,2);
 console.log('PASS: image/PDF cancellation, late bytes/task suppression, clean controls and retry after cancellation');
+
+// Reopen saved/shared JSON wall models without referring to a previous PDF/image.
+currentDesign={version:2,name:'保存から再編集',width:10.123,depth:8.237,height:2.8,thickness:.18,roof:'flat',wall:'#557799',walls:[{x1:-4,z1:-3,x2:4,z2:-3,kind:'wall'},{x1:-4,z1:3,x2:4,z2:3,kind:'wall'},{x1:-4,z1:-3,x2:-4,z2:3,kind:'wall'},{x1:4,z1:-3,x2:4,z2:3,kind:'wall'},{x1:0,z1:-3,x2:0,z2:0,kind:'wall'},{x1:0,z1:0,x2:0,z2:1,kind:'door'},{x1:0,z1:1,x2:0,z2:3,kind:'window'},{x1:-3,z1:-2,x2:-1,z2:1,kind:'wall'}]};
+const original=JSON.stringify(currentDesign);result=null;$('#editCurrentPlan').onclick();
+assert.equal($('#planDialog').open,true);assert.equal($('#cadOptions').hidden,true);assert.equal($('#planPageRow').hidden,true);assert.equal($('#planDetect').disabled,true);assert.match($('#planSourceInfo').textContent,/保存から再編集/);
+$('#planBuild').onclick();assert.equal(result.name,currentDesign.name);assert.equal(result.wall,currentDesign.wall);assert.equal(result.roof,'flat');assert.equal(result.height,2.8);assert.equal(result.thickness,.18);assert(Math.abs(result.depth-currentDesign.depth)<1e-9);assert.deepEqual(result.walls,currentDesign.walls);assert.equal(JSON.stringify(currentDesign),original);
+// Editing uses restored geometry; cancel/undo do not mutate the saved input.
+$('#editCurrentPlan').onclick();$('#planTool').value='erase';click(120,24);$('#planUndo').onclick();$('#planBuild').onclick();assert.deepEqual(result.walls,currentDesign.walls);
+$('#editCurrentPlan').onclick();$('#planTool').value='solid';click(120,(.5+.5/currentDesign.depth)*180);$('#planBuild').onclick();assert.equal(result.walls.filter(w=>w.kind==='door').length,0);assert.equal(result.walls.length,currentDesign.walls.length);$('#planUndo').onclick();$('#planBuild').onclick();assert.deepEqual(result.walls,currentDesign.walls);
+// A physically specified opening remains exact despite integer preview aspect rounding.
+$('#editCurrentPlan').onclick();$('#planTool').value='door';$('#planDoorWidth').value='1.3';
+const px=120,py=(.5-3/currentDesign.depth)*180;click(px,py);$('#planBuild').onclick();
+assert(result.walls.some(w=>w.kind==='door'&&Math.abs(Math.hypot(w.x2-w.x1,w.z2-w.z1)-1.3)<.0002));
+// Starting a different image resets native dimensions, colour and direct-vector mode.
+$('#openPlanImport').onclick();await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal(result.wall,'#e9e4d8');assert.equal(result.width,10);assert.equal(result.depth,7.5);assert.equal($('#planDetect').disabled,false);
+console.log('PASS: restored plan editing preserves dimensions, colour, roof, diagonal walls and openings; new sources reset correctly');
