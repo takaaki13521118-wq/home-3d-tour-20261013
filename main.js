@@ -1,4 +1,4 @@
-import {setupPlanImport} from './plan-import.mjs?v=20261107-cad';
+import {setupPlanImport} from './plan-import.mjs?v=20261107-editor';
 import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261107-cad';
 import * as T from 'three';
 import {bindJoystick} from './joystick.mjs?v=20261107-level';

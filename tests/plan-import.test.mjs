@@ -7,7 +7,7 @@ function pixels(){const data=new Uint8ClampedArray(240*180*4).fill(255);for(let 
 class Canvas extends Element{constructor(){super();this.width=240;this.height=180;this.data=pixels();}getContext(){const c=this;return {drawImage(img){if(img.data)c.data=img.data.slice();},fillRect(){c.data=new Uint8ClampedArray(c.width*c.height*4).fill(255);},getImageData(x,y,w,h){const data=new Uint8ClampedArray(w*h*4);for(let j=0;j<h;j++)for(let i=0;i<w;i++){const src=((y+j)*c.width+x+i)*4;data.set(c.data.slice(src,src+4),(j*w+i)*4);}return {width:w,height:h,data};},putImageData(d){c.data=d.data.slice();},beginPath(){},moveTo(){},lineTo(){},stroke(){},arc(){},fill(){}};}}
 const elements=new Map();const $=s=>{if(!elements.has(s))elements.set(s,s==='#planCanvas'?new Canvas():new Element());return elements.get(s);};
 globalThis.document={querySelector:$,createElement:t=>t==='canvas'?new Canvas():new Element()};globalThis.Image=class{constructor(){this.naturalWidth=240;this.naturalHeight=180;this.data=pixels();}async decode(){}};
-for(const [id,value]of Object.entries({planWidth:'12',planHeight:'2.6',planThickness:'.12',planRoof:'none',planThreshold:'155',planMinLength:'24',planKnownLength:'5',planTool:'erase'}))$('#'+id).value=value;
+for(const [id,value]of Object.entries({planWidth:'12',planHeight:'2.6',planThickness:'.12',planRoof:'none',planThreshold:'155',planMinLength:'24',planKnownLength:'5',planTool:'erase',planDoorWidth:'.9',planWindowWidth:'1.6'}))$('#'+id).value=value;
 let result,opened=0,closed=0;
 const pdfLib={GlobalWorkerOptions:{},getDocument(){return {destroy:async()=>{},promise:Promise.resolve({numPages:2,getPage:async()=>({getViewport:()=>({width:240,height:180}),render({canvasContext}){canvasContext.drawImage({data:pixels()});return {promise:Promise.resolve(),cancel(){}};}})})};}};
 setupPlanImport({onBuild:d=>result=validateDesign(d),onOpen:()=>opened++,onClose:()=>closed++,loadPDF:async()=>pdfLib,loadCAD:async file=>({format:file.name.split('.').pop(),doc:{header:{$INSUNITS:4},entities:[{type:"LWPOLYLINE",layer:"Walls",shape:true,vertices:[{x:0,y:0},{x:8000,y:0},{x:8000,y:6000},{x:0,y:6000}]},{type:"LINE",layer:"Dims",vertices:[{x:0,y:-1000},{x:8000,y:-1000}]}]}})});
@@ -55,3 +55,40 @@ $('#openPlanImport').onclick();$('#cadUnit').value='1';$('#cadUnit').onchange();
 $('#cadUnit').value='0.001';$('#cadApply').onclick();assert.equal($('#planBuild').disabled,false);
 await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal($('#cadOptions').hidden,true);
 console.log('PASS: DXF/DWG/JWW upload, layer selection, JWW scale, review and image switching');
+
+// Zoom changes display size, while all edits still use source-image coordinates.
+$('#planAutoPreview').checked=false;$('#openPlanImport').onclick();
+await $('#planFile').onchange({target:{files:[file],value:'file'}});
+$('#planZoomIn').onclick();$('#planZoomIn').onclick();assert.equal($('#planCanvas').style.width,'200%');
+$('#planCanvas').getBoundingClientRect=()=>({left:-120,top:-90,width:480,height:360});
+$('#planTool').value='door';$('#planDoorWidth').value='1.2';click(120,-47);
+$('#planBuild').onclick();let opening=result.walls.find(w=>w.kind==='door');assert(opening);assert(Math.abs(Math.hypot(opening.x2-opening.x1,opening.z2-opening.z1)-1.2)<.001);
+$('#planUndo').onclick();$('#planTool').value='window';$('#planWindowWidth').value='2';click(120,-47);$('#planBuild').onclick();opening=result.walls.find(w=>w.kind==='window');assert(Math.abs(Math.hypot(opening.x2-opening.x1,opening.z2-opening.z1)-2)<.001);
+$('#planUndo').onclick();$('#planDoorWidth').value='0';$('#planTool').value='door';click(120,-47);assert.match($('#planStatus').textContent,/0.3〜6/);
+const beforePan=$('#planCount').textContent;$('#planTool').value='pan';$('#planTool').onchange();click(120,-47);assert.equal($('#planCount').textContent,beforePan);assert.equal($('#planCanvas').style.touchAction,'pan-x pan-y');
+$('#planZoomFit').onclick();assert.equal($('#planCanvas').style.width,'100%');assert.equal($('#planZoomOut').disabled,true);
+$('#planCanvas').getBoundingClientRect=()=>({left:0,top:0,width:240,height:180});
+$('#planTool').value='erase';$('#planTool').onchange();
+console.log('PASS: zoomed coordinate picking, variable door/window sizes, invalid width rejection and pan without edits');
+
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
+// Closing an image load and reopening must not allow its late completion to build.
+let finishImage;globalThis.Image.prototype.decode=()=>new Promise(resolve=>{finishImage=resolve;});
+$('#planAutoPreview').checked=true;$('#openPlanImport').onclick();result=null;
+let pendingLoad=$('#planFile').onchange({target:{files:[file],value:'file'}});await tick();
+assert.equal($('#planBuild').disabled,true);assert.equal($('#planUndo').disabled,true);
+$('#closePlanImport').onclick();assert.equal($('#planFile').disabled,false);$('#openPlanImport').onclick();finishImage();await pendingLoad;
+assert.equal(result,null);assert.equal($('#planBuild').disabled,true);assert.match($('#planStatus').textContent,/中止/);
+globalThis.Image.prototype.decode=async()=>{};
+await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal(result?.version,2);
+// Closing while PDF bytes are being read must prevent creation of a late PDF task.
+let finishBytes,starts=0;const validGetDocument=pdfLib.getDocument;
+pdfLib.getDocument=(...args)=>{starts++;return validGetDocument(...args);};
+const slowPDF={name:'slow.pdf',size:3,type:'application/pdf',arrayBuffer:()=>new Promise(resolve=>{finishBytes=resolve;})};
+$('#openPlanImport').onclick();result=null;pendingLoad=$('#planFile').onchange({target:{files:[slowPDF],value:'file'}});await tick();$('#closePlanImport').onclick();$('#openPlanImport').onclick();finishBytes(new ArrayBuffer(3));await pendingLoad;assert.equal(starts,0);assert.equal(result,null);
+// Closing an active PDF load destroys its task and ignores late resolution.
+let finishDocument,destroyed=0;
+pdfLib.getDocument=()=>({destroy:async()=>{destroyed++;},promise:new Promise(resolve=>{finishDocument=resolve;})});
+pendingLoad=$('#planFile').onchange({target:{files:[pdf],value:'file'}});await tick();$('#closePlanImport').onclick();$('#openPlanImport').onclick();finishDocument({numPages:99});await pendingLoad;assert.equal(destroyed,1);assert.equal(result,null);assert.equal($('#planPageRow').hidden,true);
+pdfLib.getDocument=validGetDocument;await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal(result?.version,2);
+console.log('PASS: image/PDF cancellation, late bytes/task suppression, clean controls and retry after cancellation');
