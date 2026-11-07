@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {cadVectors,cadPreview,clipCADLines} from '../cad-core.mjs';
+import {makePlanDesign,planAllowed,planSpawn,planSolids,solidDistance,openParallelWalls} from '../plan-core.mjs';
+const line=(a,b,layer='Walls')=>({type:'LINE',layer,vertices:[{x:a[0],y:a[1]},{x:b[0],y:b[1]}]});
+const doc={header:{$INSUNITS:4},entities:[line([0,0],[8000,0]),line([8000,0],[8000,6000]),line([8000,6000],[0,6000]),line([0,6000],[0,0]),line([0,0],[8000,0]),line([0,0],[4000,4000]),{type:'CIRCLE',layer:'Doors'},line([0,-300],[8000,-300],'Dimensions')]};
+const cad=cadVectors(doc);assert.equal(cad.lines.length,6);assert.equal(cad.metresPerUnit,.001);assert.equal(cad.skipped.CIRCLE,1);
+const p=cadPreview(cad,['Walls'],{metresPerUnit:.001});const d=makePlanDesign(p.lines,p.width,p.height,{width:p.worldWidth});assert.equal(d.walls.length,5);assert(Math.abs(d.walls[0].x2-d.walls[0].x1-8)<.001);assert(Math.abs(d.walls[0].z1-d.walls[1].z2-6)<.001);assert(planSpawn(d));
+const diagonal={...d,walls:[{x1:-2,z1:-2,x2:2,z2:2,kind:'wall'}]};assert(!planAllowed(diagonal,0,0));assert(planAllowed(diagonal,-1,1));assert(solidDistance(planSolids(diagonal)[0],0,0)<.001);
+const blocked=cadVectors({entities:[{type:'INSERT',name:'room',layer:'Wall',position:{x:100,y:200},rotation:90,xScale:2,yScale:3}],blocks:{room:{position:{x:10,y:20},entities:[line([10,20],[20,20],'0'),line([20,20],[20,30],'0')]}}});
+assert.equal(blocked.lines[0].layer,'Wall');assert(Math.abs(blocked.lines[0].x1-100)<1e-8);assert(Math.abs(blocked.lines[0].y2-220)<1e-8);assert(Math.abs(blocked.lines[1].x2-70)<1e-8);
+const loop={entities:[{type:'INSERT',name:'loop'},...doc.entities],blocks:{loop:{entities:[{type:'INSERT',name:'loop'}]}}};assert.equal(cadVectors(loop).skipped['循環・深いブロック'],1);
+const poly=cadVectors({entities:[{type:'LWPOLYLINE',shape:true,layer:'A',vertices:[{x:0,y:0},{x:2,y:0,bulge:.5},{x:2,y:2},{x:0,y:2}]}]});assert.equal(poly.lines.length,3);assert.equal(poly.skipped['曲線'],1);
+assert.throws(()=>cadPreview(cad,[]));assert.throws(()=>cadPreview({...cad,lines:Array(401).fill(cad.lines[0])},['Walls']));
+assert.equal(cadVectors(doc,{format:'jww'}).metresPerUnit,null);const jp=cadPreview(cad,['Walls'],{metresPerUnit:.001,paperScale:100});assert.equal(jp.worldWidth,p.worldWidth*100);
+assert.throws(()=>cadVectors({entities:[line([NaN,0],[1,1])]}));
+const clipped=clipCADLines([{x1:-20,y1:-20,x2:120,y2:120,kind:'wall'}],0,0,100,100);assert.deepEqual(clipped,[{x1:0,y1:0,x2:100,y2:100,kind:'wall'}]);
+const opened=openParallelWalls([{x1:0,y1:0,x2:200,y2:200,kind:'wall'},{x1:0,y1:5,x2:200,y2:205,kind:'wall'},{x1:100,y1:0,x2:100,y2:200,kind:'wall'}],{index:0,t:.5},30,'door',8);assert.equal(opened.filter(l=>l.kind==='door').length,2);
+console.log('PASS: CAD layers, units, block transforms, duplicate/curve exclusion, diagonal collisions, crop and openings');

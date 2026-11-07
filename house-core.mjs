@@ -1,4 +1,4 @@
-import {validatePlanDesign} from './plan-core.mjs';
+import {validatePlanDesign} from './plan-core.mjs?v=20261107-cad';
 export function validateDesign(v){
  if(v?.version===2)return validatePlanDesign(v);
  if(!v||v.version!==1)throw Error('この形式のモデルは読み込めません。');

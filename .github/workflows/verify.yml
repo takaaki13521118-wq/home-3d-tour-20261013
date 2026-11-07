@@ -16,6 +16,7 @@ jobs:
           node --check main.js
           node tests/core.test.mjs
           node tests/joystick.test.mjs
+          node tests/cad.test.mjs
           node tests/plan.test.mjs
           node tests/plan-pages.test.mjs
           node tests/plan-import.test.mjs
@@ -32,3 +33,9 @@ jobs:
           curl --fail --retry 2 --max-time 40 -o "$RUNNER_TEMP/pdf.worker.mjs" https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs
           node --check "$RUNNER_TEMP/pdf.mjs"
           node --check "$RUNNER_TEMP/pdf.worker.mjs"
+      - name: Install pinned CAD runtimes for verification
+        run: npm install --prefix "$RUNNER_TEMP/cad-test" --ignore-scripts --no-audit --no-fund ezjww@0.7.11 dwgdxf@2.0.1 dxf-parser@1.1.2
+      - name: Read real DXF, JWW and seven DWG versions
+        env:
+          CAD_TEST_ROOT: ${{ runner.temp }}/cad-test
+        run: node tests/cad-smoke.mjs

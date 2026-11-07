@@ -12,7 +12,7 @@ const spawn=planSpawn(d);assert(spawn);assert(planAllowed(d,spawn.x,spawn.z));as
 const hit=closestLine([{x1:10,y1:20,x2:210,y2:20,kind:'wall'}],100,23,5);assert.equal(hit.index,0);assert.equal(closestLine(lines,-100,-100,3),null);
 const split=addOpening({x1:10,y1:20,x2:210,y2:20,kind:'wall'},.95,30,'door');assert.equal(split.length,3);assert.equal(split[1].kind,'door');assert(Math.abs(split[1].x2-split[1].x1-30)<1e-8);
 assert.throws(()=>addOpening({x1:0,y1:0,x2:10,y2:0,kind:'wall'},.5,30,'door'));
-for(const change of [{thickness:NaN},{width:Infinity},{walls:[]},{height:99},{wall:'red'},{walls:[{x1:0,x2:1,z1:0,z2:1,kind:'wall'}]}])assert.throws(()=>validatePlanDesign({...d,...change}));
+for(const change of [{thickness:NaN},{width:Infinity},{walls:[]},{height:99},{wall:'red'},{walls:[{x1:0,x2:0,z1:0,z2:0,kind:'wall'}]}])assert.throws(()=>validatePlanDesign({...d,...change}));
 const h=createDesignHistory();h.push(d);h.push({...d,name:'second'});const restored=h.undo();restored.walls[0].x1=999;assert.equal(h.redo().name,'second');assert.notEqual(h.undo().walls[0].x1,999);
 const shared=designShareURL('https://example.test/',d);assert.deepEqual(validateDesign(JSON.parse(decodeURIComponent(shared.split('#design=')[1]))),d);
 const empty=new Uint8ClampedArray(width*height*4).fill(255);assert.equal(detectWalls({width,height,data:empty}).length,0);assert.throws(()=>detectWalls({width,height,data},{minLength:0}));
