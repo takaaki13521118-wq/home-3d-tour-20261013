@@ -7,6 +7,15 @@ rect(20,20,200,4);rect(20,156,200,4);rect(20,20,4,140);rect(216,20,4,140);rect(1
 const lines=detectWalls({width,height,data},{minLength:24,merge:5});assert(lines.length>=6&&lines.length<15);
 assert(lines.some(l=>Math.abs(l.y1-21.5)<3&&Math.abs(l.y2-l.y1)<1&&l.x2-l.x1>190));
 assert(!lines.some(l=>l.x1>=50&&l.x2<=58&&l.y1>=60&&l.y2<=68));
+const thickImage=new Uint8ClampedArray(width*height*4).fill(255);
+const paint=(pixels,x,y,w,h)=>{for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++){const p=(j*width+i)*4;pixels[p]=pixels[p+1]=pixels[p+2]=0;}};
+for(const [x,y,w,h] of [[20,20,200,8],[20,140,200,8],[20,20,8,128],[212,20,8,128],[20,169,200,2]])paint(thickImage,x,y,w,h);
+const withoutDimensions=detectWalls({width,height,data:thickImage},{minLength:24,merge:5});
+assert(!withoutDimensions.some(l=>Math.abs(l.y1-169.5)<2&&Math.abs(l.y2-l.y1)<1));
+assert(detectWalls({width,height,data:thickImage},{minLength:24,merge:5,minStroke:1}).some(l=>Math.abs(l.y1-169.5)<2));
+const thinImage=new Uint8ClampedArray(width*height*4).fill(255);
+for(const [x,y,w,h] of [[20,20,200,2],[20,140,200,2],[20,20,2,122],[218,20,2,122]])paint(thinImage,x,y,w,h);
+assert(detectWalls({width,height,data:thinImage},{minLength:24,merge:5}).length>=4);
 const d=makePlanDesign(lines,width,height,{width:12,height:2.6});assert.equal(d.depth,9);assert.deepEqual(validateDesign(JSON.parse(JSON.stringify(d))),d);assert.equal(interiorStartRoom(d),'planWalk');
 const spawn=planSpawn(d);assert(spawn);assert(planAllowed(d,spawn.x,spawn.z));assert(!planAllowed(d,99,0));
 const hit=closestLine([{x1:10,y1:20,x2:210,y2:20,kind:'wall'}],100,23,5);assert.equal(hit.index,0);assert.equal(closestLine(lines,-100,-100,3),null);

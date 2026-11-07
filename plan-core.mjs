@@ -19,7 +19,10 @@ export function detectWalls(image,{threshold=155,minLength=28,merge=5,minStroke=
    };
    for(let col=0;col<cols;col++){const on=ink[axis==='h'?row*w+col:col*w+row];if(on){if(start<0)start=col;last=col;}else if(start>=0&&col-last>2){flush();start=-1;}}flush();
   }
-  result.push(...groups.filter(g=>g.count>=minStroke).map(g=>axis==='h'?{x1:g.start,y1:g.coord,x2:g.end,y2:g.coord,kind:'wall'}:{x1:g.coord,y1:g.start,x2:g.coord,y2:g.end,kind:'wall'}));
+  const thick=groups.filter(g=>g.count>=5&&g.end-g.start+1>=minLength).map(g=>g.count).sort((a,b)=>a-b);
+  const typical=thick.length>=2?thick[Math.floor(thick.length/2)]:0;
+  const minimum=minStroke===1?1:Math.max(minStroke,Math.min(4,Math.floor(typical*.4)));
+  result.push(...groups.filter(g=>g.count>=minimum).map(g=>axis==='h'?{x1:g.start,y1:g.coord,x2:g.end,y2:g.coord,kind:'wall'}:{x1:g.coord,y1:g.start,x2:g.coord,y2:g.end,kind:'wall'}));
  }
  if(result.length>400)throw Error('線が多すぎます。建物だけを切り抜くか、最短の壁を長く設定してください。');
  return result;

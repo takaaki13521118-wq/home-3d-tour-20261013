@@ -20,8 +20,9 @@ $('#planTool').value='wall';click(120,24);click(120,155);$('#planBuild').onclick
 $('#planUndo').onclick();$('#planBuild').onclick();assert.equal(result.walls.length,4);$('#planRedo').onclick();$('#planBuild').onclick();assert.equal(result.walls.length,5);
 $('#planTool').value='door';click(120,90);$('#planBuild').onclick();assert(result.walls.some(w=>w.kind==='door'));
 $('#planTool').value='scale';click(20,20);click(220,20);assert.equal(+$('#planWidth').value,6);
-const pdf=new Blob(['pdf'],{type:'application/pdf'});pdf.name='plan.pdf';await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal($('#planPageRow').hidden,false);assert.equal($('#planPage').children.length,2);assert.equal($('#planBuild').disabled,false);
-$('#planPage').value='2';await $('#planPage').onchange();assert.equal($('#planBuild').disabled,false);
+$('#planKnownLength').value='8';$('#planKnownLength').handlers.input();assert.equal(+$('#planWidth').value,9.6);assert.match($('#planStatus').textContent,/8 m/);
+$('#openPlanImport').onclick();const pdf=new Blob(['pdf'],{type:'application/pdf'});pdf.name='plan.pdf';await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal($('#planPageRow').hidden,false);assert.equal($('#planPage').children.length,3);assert.equal($('#planBuild').disabled,true);assert.equal($('#planCount').textContent.includes('0 本'),true);
+$('#planPage').value='2';await $('#planPage').onchange();assert.equal($('#planBuild').disabled,false);assert.equal($('#planDialog').open,true);
 const invalid=new Blob(['invalid'],{type:'application/zip'});invalid.name='test.zip';await $('#planFile').onchange({target:{files:[invalid],value:'file'}});assert.equal($('#planBuild').disabled,true);assert.match($('#planStatus').textContent,/読み込めません/);
 console.log('PASS: image/PDF upload wiring, page selection, editing, undo/redo, scale, model build and failure state');
 // Automatic path: no build-button click is required after image selection.
@@ -30,7 +31,7 @@ await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal
 // A multi-page PDF with no readable title stays open rather than showing an arbitrary page as a house.
 $('#openPlanImport').onclick();result=null;
 await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal(result,null);assert.equal($('#planDialog').open,true);assert.match($('#planStatus').textContent,/特定できません/);
-$('#planPage').value='2';await $('#planPage').onchange();assert.equal(result?.version,2);assert.equal($('#planDialog').open,false);
+$('#planPage').value='2';await $('#planPage').onchange();assert.equal(result,null);assert.equal($('#planDialog').open,true);$('#planBuild').onclick();assert.equal(result?.version,2);assert.equal($('#planDialog').open,false);
 // Readable title selects the floor-plan page and generates the model automatically.
 pdfLib.getDocument=()=>({destroy:async()=>{},promise:Promise.resolve({numPages:3,getPage:async n=>({getTextContent:async()=>({items:[{str:n===2?'１階 平面詳細図':'立面図'}]}),getViewport:()=>({width:240,height:180}),render({canvasContext}){canvasContext.drawImage({data:pixels()});return {promise:Promise.resolve(),cancel(){}};}})})});
 $('#openPlanImport').onclick();result=null;
@@ -90,7 +91,7 @@ $('#openPlanImport').onclick();result=null;pendingLoad=$('#planFile').onchange({
 let finishDocument,destroyed=0;
 pdfLib.getDocument=()=>({destroy:async()=>{destroyed++;},promise:new Promise(resolve=>{finishDocument=resolve;})});
 pendingLoad=$('#planFile').onchange({target:{files:[pdf],value:'file'}});await tick();$('#closePlanImport').onclick();$('#openPlanImport').onclick();finishDocument({numPages:99});await pendingLoad;assert.equal(destroyed,1);assert.equal(result,null);assert.equal($('#planPageRow').hidden,true);
-pdfLib.getDocument=validGetDocument;await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal(result?.version,2);
+pdfLib.getDocument=validGetDocument;result=null;await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal(result?.version,2);
 console.log('PASS: image/PDF cancellation, late bytes/task suppression, clean controls and retry after cancellation');
 
 // Reopen saved/shared JSON wall models without referring to a previous PDF/image.
