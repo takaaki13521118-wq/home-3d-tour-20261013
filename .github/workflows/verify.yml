@@ -15,6 +15,7 @@ jobs:
         run: |
           node --check main.js
           node tests/core.test.mjs
+          node tests/share-codec.test.mjs
           node tests/design-library.test.mjs
           node tests/design-library-ui.test.mjs
           node tests/joystick.test.mjs
