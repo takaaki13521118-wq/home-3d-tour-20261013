@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {readCAD,jwwBrowserModule} from '../cad-runtime.mjs';
+assert.throws(()=>jwwBrowserModule('unrecognized library'),/構成/);
+const workers=[];let response='success';
+globalThis.Worker=class{constructor(url,options){assert(url.startsWith('blob:'));assert.equal(options.type,'module');workers.push(this);}terminate(){this.terminated=true;}postMessage(data,transfer){assert.equal(data.format,'dwg');assert.equal(transfer[0],data.buffer);if(response==='success')queueMicrotask(()=>this.onmessage({data:{result:{format:'dwg'}}}));if(response==='error')queueMicrotask(()=>this.onerror());}};
+const file=new Blob(['AC1032']);file.name='home.DWG';
+assert.equal((await readCAD(file)).format,'dwg');assert(workers.at(-1).terminated);
+response='error';await assert.rejects(readCAD(file),/起動できません/);assert(workers.at(-1).terminated);
+response='pending';const ac=new AbortController(),pending=readCAD(file,{signal:ac.signal});await new Promise(resolve=>setImmediate(resolve));ac.abort();await assert.rejects(pending,e=>e.name==='AbortError');assert(workers.at(-1).terminated);
+const n=workers.length;await assert.rejects(readCAD(file,{signal:ac.signal}),e=>e.name==='AbortError');assert.equal(workers.length,n);
+console.log('PASS: CAD worker transfer, cleanup, errors, cancellation and pre-cancelled uploads');

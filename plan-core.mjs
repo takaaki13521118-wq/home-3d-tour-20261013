@@ -49,7 +49,7 @@ export function closestLine(lines,x,y,maxDistance){let best=null;for(let i=0;i<l
 export function addOpening(line,t,span,kind){const len=Math.hypot(line.x2-line.x1,line.y2-line.y1);const margin=Math.max(3,span*.12);if(len<span+2*margin)throw Error('この壁には開口部を追加する長さがありません。');const centre=Math.max(span/2+margin,Math.min(len-span/2-margin,t*len));const a=(centre-span/2)/len,b=(centre+span/2)/len;const part=(u,v,k)=>({x1:line.x1+(line.x2-line.x1)*u,y1:line.y1+(line.y2-line.y1)*u,x2:line.x1+(line.x2-line.x1)*v,y2:line.y1+(line.y2-line.y1)*v,kind:k});return [part(0,a,line.kind),part(a,b,kind),part(b,1,line.kind)];}
 // Open both outlines when a CAD wall is drawn as two nearby parallel lines.
 export function openParallelWalls(lines,hit,span,kind,tolerance){
- const chosen=lines[hit.index],horizontal=Math.abs(chosen.x2-chosen.x1)>Math.abs(chosen.y2-chosen.y1),x=chosen.x1+(chosen.x2-chosen.x1)*hit.t,y=chosen.y1+(chosen.y2-chosen.y1)*hit.t;
+ const chosen=lines[hit.index],x=chosen.x1+(chosen.x2-chosen.x1)*hit.t,y=chosen.y1+(chosen.y2-chosen.y1)*hit.t;
  const primary=addOpening(chosen,hit.t,span,kind);
  return lines.flatMap((l,i)=>{if(i===hit.index)return primary;if(l.kind!=='wall')return [l];const ax=chosen.x2-chosen.x1,ay=chosen.y2-chosen.y1,bx=l.x2-l.x1,by=l.y2-l.y1;if(Math.abs(ax*by-ay*bx)>Math.hypot(ax,ay)*Math.hypot(bx,by)*.01)return [l];const nearby=closestLine([l],x,y,tolerance);if(!nearby)return [l];try{return addOpening(l,nearby.t,span,kind);}catch{return [l];}});
 }

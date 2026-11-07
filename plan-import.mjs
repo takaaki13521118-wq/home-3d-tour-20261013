@@ -8,7 +8,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,loadCAD=readCAD,loadPDF=
  const source=document.createElement('canvas'),sx=source.getContext('2d',{willReadFrequently:true});
  let lines=[],pending=null,pointer=null,pdf=null,pdfTask=null,renderTask=null,epoch=0,busy=false,undo=[],redo=[],hasSource=false,cad=null,cadAbort=null,cadDirty=false;
  const status=t=>{$('#planStatus').textContent=t;};
- const setBusy=v=>{busy=v;$('#planBuild').disabled=v||!lines.length;$('#planDetect').disabled=v||!source.width;$('#planFile').disabled=v;$('#planPage').disabled=v;$('#cadApply').disabled=v;$('#cadLayers').disabled=v;$('#cadUnit').disabled=v;$('#cadScale').disabled=v;};
+ const setBusy=v=>{busy=v;$('#planBuild').disabled=v||!lines.length;$('#planDetect').disabled=v||!source.width;$('#planFile').disabled=v;$('#planPage').disabled=v;$('#cadApply').disabled=v;$('#cadLayers').disabled=v;$('#cadUnit').disabled=v;$('#cadScale').disabled=v;for(const id of ['planThreshold','planMinLength','planThinLines'])$('#'+id).disabled=v||!!cad;};
  function history(){undo.push(JSON.stringify(lines));if(undo.length>30)undo.shift();redo=[];}
  function draw(){
   canvas.hidden=source.width<8;canvas.width=source.width;canvas.height=source.height;ctx.drawImage(source,0,0);ctx.lineWidth=Math.max(2,source.width/400);
@@ -38,9 +38,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,loadCAD=readCAD,loadPDF=
   cad=cadVectors(result.doc,result);$('#cadOptions').hidden=false;$('#cadLayers').replaceChildren();
   const preferred=cad.layers.filter(l=>l.visible&&/wall|壁|躯体/i.test(l.name));
   for(const layer of cad.layers){const o=document.createElement('option');o.value=layer.name;o.textContent=`${layer.name}（${layer.count}本）`;o.selected=preferred.length?preferred.includes(layer):layer.visible;$('#cadLayers').append(o);}
-  $('#cadUnit').value=cad.format==='jww'?'.001':cad.metresPerUnit===null?'manual':String(cad.metresPerUnit);
-  // Normalize numeric option values (0.001 rather than .001).
-  if(cad.format==='jww')$('#cadUnit').value='0.001';
+  $('#cadUnit').value=cad.format==='jww'?'0.001':cad.metresPerUnit===null?'manual':String(cad.metresPerUnit);
   $('#cadScale').value='100';$('#cadScaleRow').hidden=cad.format!=='jww';
   const excluded=Object.entries(cad.skipped).map(([type,n])=>`${type} ${n}個`).join('、');
   $('#cadNotice').textContent=[...cad.notices,'曲線・文字・寸法・外部参照・3Dソリッドは壁にしません。斜めの直線とブロック内の直線に対応します。',excluded?'除外した図形：'+excluded:'',cad.format==='jww'?'縮尺は仮に1/100です。原図の縮尺へ変更してください。':'CAD単位が正しいか原図の寸法と照合してください。'].filter(Boolean).join(' ');
