@@ -1,0 +1,21 @@
+name: Inspect pinned CAD runtimes
+on:
+  push:
+    branches: ['inspect-cad-runtime-*']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund ezjww@0.7.11 dwgdxf@2.0.1 dxf-parser@1.1.2
+      - run: |
+          head -35 node_modules/ezjww/wasm/ezjww_wasm.js
+          tail -45 node_modules/ezjww/wasm/ezjww_wasm.js
+          cat node_modules/dwgdxf/dist/index.js
+          ls -lh node_modules/ezjww/wasm
+          node -e "const j=require('ezjww'); const d=j.newJwwDocument(); console.log(Object.keys(d), Object.keys(j)); console.log(d.options.layer_groups[0]);"
