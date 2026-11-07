@@ -1,3 +1,4 @@
+import {setupDesignLibrary} from './design-library-ui.mjs';
 import {setupPlanImport} from './plan-import.mjs?v=20261107-editor';
 import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261107-cad';
 import * as T from 'three';
@@ -154,8 +155,6 @@ window.houseViewerState=()=>({mode,meshes:scene.children.length,roof:roof.visibl
 
 $('#designForm').onsubmit=e=>{e.preventDefault();try{buildDesign(readDesign());showToast('新しい家を作成しました');}catch(err){showToast(err.message);}};
 $('#exportDesign').onclick=()=>{try{if(custom)downloadDesign(custom.d);}catch(e){showToast(e.message);}};
-$('#saveDesign').onclick=()=>{try{if(!custom)return;localStorage.setItem('houseDesignV1',JSON.stringify(custom.d));showToast('この端末に保存しました');}catch(e){showToast('保存できません。モデルを書き出してください。');}};
-$('#loadDesign').onclick=()=>{try{const d=validateDesign(JSON.parse(localStorage.getItem('houseDesignV1')));fillDesign(d);buildDesign(d);}catch(e){showToast('保存済みモデルがないか、読み込めません。');}};
 $('#importDesign').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>200000)throw Error('モデルファイルが大きすぎます。');const d=validateDesign(JSON.parse(await file.text()));fillDesign(d);buildDesign(d);}catch(err){showToast(err.message);}finally{e.target.value='';}};
 $('#originalHouse').onclick=()=>restoreOriginal();
 $('#undoDesign').onclick=()=>{if(designHistory.canUndo)restoreHistory('undo');};
@@ -176,3 +175,5 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)resetInput(
 if(location.hash.startsWith('#design=')){try{const d=validateDesign(JSON.parse(decodeURIComponent(location.hash.slice(8))));fillDesign(d);buildDesign(d);}catch(e){showToast('共有モデルを読み込めませんでした。');}}
 
 setupPlanImport({onBuild:(d,{automatic=false}={})=>{buildDesign(d);showToast(automatic?'概略3Dを自動生成しました。メニューから壁線・実寸を確認できます。':'図面から3Dモデルを更新しました');},onOpen:()=>{planDialogOpen=true;resetInput();orbit.enabled=false;},onClose:()=>{planDialogOpen=false;resetInput();orbit.enabled=mode!=='inside';}});
+
+setupDesignLibrary({getDesign:()=>custom?.d,onLoad:d=>{fillDesign(d);buildDesign(d);},onDownload:downloadDesign,notify:showToast,onOpen:()=>{planDialogOpen=true;resetInput();orbit.enabled=false;},onClose:()=>{planDialogOpen=false;resetInput();orbit.enabled=mode!=='inside';}});

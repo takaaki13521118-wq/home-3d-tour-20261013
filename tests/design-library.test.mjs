@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {LIBRARY_KEY,readLibrary,saveToLibrary,renameInLibrary,deleteFromLibrary,restoreDeletedDesign} from '../design-library.mjs';
+const base={version:1,name:'案A',width:10,depth:9,height:2.6,bedrooms:2,ratio:.45,side:'north',roof:'shed',wall:'#778855',roofColor:'#aa7744'};
+const plan={version:2,name:'図面案',width:10,depth:8,height:2.6,thickness:.12,roof:'none',wall:'#eeeeee',walls:[{x1:-3,z1:-3,x2:3,z2:3,kind:'wall'}]};
+export class MemoryStorage{constructor(){this.data=new Map();}getItem(k){return this.data.get(k)??null;}setItem(k,v){this.data.set(k,String(v));}}
+const s=new MemoryStorage();assert.equal(readLibrary(s).items.length,0);
+s.setItem('houseDesignV1',JSON.stringify(base));assert.equal(readLibrary(s).items[0].id,'legacy');
+saveToLibrary(s,plan,{id:'plan',now:10});assert.equal(readLibrary(s).items.length,2);assert.equal(s.getItem('houseDesignV1'),JSON.stringify(base));assert(readLibrary(s).items.some(i=>i.design.name==='案A'));
+assert(saveToLibrary(s,plan).duplicate);assert.equal(readLibrary(s).items.length,2);
+renameInLibrary(s,'plan','修正案');assert.equal(readLibrary(s).items[0].design.name,'修正案');assert.equal(plan.name,'図面案');
+assert.throws(()=>renameInLibrary(s,'plan',' '));assert.throws(()=>renameInLibrary(s,'missing','name'));
+deleteFromLibrary(s,'legacy');assert.equal(readLibrary(s).items.length,1);assert.equal(readLibrary(s).deleted.id,'legacy');
+restoreDeletedDesign(s);assert.equal(readLibrary(s).items.length,2);assert.equal(readLibrary(s).deleted,null);
+const copied=readLibrary(s);copied.items[0].design.width=99;assert.equal(readLibrary(s).items[0].design.width,10);
+for(let n=0;n<18;n++)saveToLibrary(s,{...base,name:'variant'+n},{id:'v'+n,now:n});
+const full=s.getItem(LIBRARY_KEY);assert.throws(()=>saveToLibrary(s,{...base,name:'21番目'}),/20件/);assert.equal(s.getItem(LIBRARY_KEY),full);
+deleteFromLibrary(s,'v0');saveToLibrary(s,{...base,name:'replacement'},{id:'replacement',now:20});assert.throws(()=>restoreDeletedDesign(s),/書き出す/);assert.equal(readLibrary(s).deleted.id,'v0');
+const beforeFailure=s.getItem(LIBRARY_KEY),originalSet=s.setItem;s.setItem=()=>{throw Error('QuotaExceeded');};assert.throws(()=>deleteFromLibrary(s,'v1'),/書き出す/);assert.equal(s.getItem(LIBRARY_KEY),beforeFailure);s.setItem=originalSet;
+s.setItem(LIBRARY_KEY,'broken');assert.throws(()=>saveToLibrary(s,base),/変更していません/);assert.equal(s.getItem(LIBRARY_KEY),'broken');
+s.setItem(LIBRARY_KEY,JSON.stringify({version:1,items:[{id:'x',savedAt:0,design:base},{id:'x',savedAt:0,design:base}],deleted:null}));assert.throws(()=>readLibrary(s),/重複/);
+const empty=new MemoryStorage();saveToLibrary(empty,base,{id:'only',now:0});deleteFromLibrary(empty,'only');assert.equal(readLibrary(empty).items.length,0);restoreDeletedDesign(empty);assert.equal(readLibrary(empty).items[0].id,'only');
+console.log('PASS: library migration, multiple model formats, deduplication, rename, deletion recovery, capacity, quota and corrupt-data preservation');
