@@ -1,9 +1,10 @@
+import {chooseFloorPlanPage} from './plan-pages.mjs';
 import {detectWalls,makePlanDesign,closestLine,openParallelWalls} from './plan-core.mjs';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 export function setupPlanImport({onBuild,onOpen,onClose,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs')}){
  const $=s=>document.querySelector(s),dialog=$('#planDialog'),canvas=$('#planCanvas'),ctx=canvas.getContext('2d');
  const source=document.createElement('canvas'),sx=source.getContext('2d',{willReadFrequently:true});
- let lines=[],pending=null,pointer=null,pdf=null,pdfTask=null,renderTask=null,epoch=0,busy=false,undo=[],redo=[];
+ let lines=[],pending=null,pointer=null,pdf=null,pdfTask=null,renderTask=null,epoch=0,busy=false,undo=[],redo=[],hasSource=false;
  const status=t=>{$('#planStatus').textContent=t;};
  const setBusy=v=>{busy=v;$('#planBuild').disabled=v||!lines.length;$('#planDetect').disabled=v||!source.width;$('#planFile').disabled=v;$('#planPage').disabled=v;};
  function history(){undo.push(JSON.stringify(lines));if(undo.length>30)undo.shift();redo=[];}
@@ -19,13 +20,19 @@ export function setupPlanImport({onBuild,onOpen,onClose,loadPDF=()=>import(PDF_B
   const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:$('#planThinLines').checked?1:2});
   history();lines=candidate;pending=null;draw();status(lines.length?'線を自動検出しました。寸法線や家具の線は削除し、実寸を設定して「3Dを作る」を押してください。':'壁の線が見つかりません。読み取り濃さを上げるか、「壁を追加」で補ってください。');
  }
- async function renderPage(){
+ function buildPreview(automatic=false){
+  if(automatic&&(!dialog.open||!$('#planAutoPreview').checked||!lines.length))return;
+  try{const d=makePlanDesign(lines,source.width,source.height,{name:$('#planName').value,width:+$('#planWidth').value,height:+$('#planHeight').value,thickness:+$('#planThickness').value,roof:$('#planRoof').value});
+   onBuild(d,{automatic});status('3Dを生成しました。ページ・壁線・実寸を確認し、必要に応じて修正して更新してください。');$('#openPlanImport').textContent='図面を選ぶ・読取結果を修正';dialog.close();
+  }catch(e){status('3D化できませんでした。壁線と寸法を修正してください。'+e.message);}
+ }
+ async function renderPage({auto=true}={}){
   const id=++epoch;setBusy(true);status('PDFのページを読み込んでいます…');
-  try{const page=await pdf.getPage(+$('#planPage').value);if(id!==epoch)return;const view=page.getViewport({scale:1});const viewport=page.getViewport({scale:Math.min(2,1200/Math.max(view.width,view.height))});source.width=Math.ceil(viewport.width);source.height=Math.ceil(viewport.height);renderTask=page.render({canvasContext:sx,viewport,background:'#ffffff'});await renderTask.promise;if(id!==epoch)return;renderTask=null;clearEdits();detect();}catch(e){if(id===epoch){clearEdits();draw();status('PDFを表示できませんでした。画像にして読み込む方法も使えます。');}}finally{if(id===epoch)setBusy(false);}
+  try{const page=await pdf.getPage(+$('#planPage').value);if(id!==epoch)return;const view=page.getViewport({scale:1});const viewport=page.getViewport({scale:Math.min(2,1200/Math.max(view.width,view.height))});source.width=Math.ceil(viewport.width);source.height=Math.ceil(viewport.height);renderTask=page.render({canvasContext:sx,viewport,background:'#ffffff'});await renderTask.promise;if(id!==epoch)return;renderTask=null;clearEdits();detect();if(auto)buildPreview(true);else status('平面図のページを特定できませんでした。上のページ選択から平面図を選んでください。');}catch(e){if(id===epoch){clearEdits();draw();status('PDFを表示できませんでした。画像にして読み込む方法も使えます。');}}finally{if(id===epoch)setBusy(false);}
  }
  async function load(file){
   if(!file)return;if(file.size>25*1024*1024){status('25MB以下のPDF・画像を選んでください。');return;}
-  const id=++epoch;setBusy(true);clearEdits();source.width=source.height=1;sx.fillStyle='white';sx.fillRect(0,0,1,1);draw();$('#planName').value=file.name.replace(/\.[^.]+$/,'').slice(0,40);$('#planPageRow').hidden=true;status('図面を読み込んでいます…');
+  const id=++epoch;setBusy(true);if(hasSource)$('#planWidth').value='10';hasSource=true;clearEdits();source.width=source.height=1;sx.fillStyle='white';sx.fillRect(0,0,1,1);draw();$('#planName').value=file.name.replace(/\.[^.]+$/,'').slice(0,40);$('#planPageRow').hidden=true;status('図面を読み込んでいます…');
   try{
    renderTask?.cancel();renderTask=null;await pdfTask?.destroy();pdfTask=null;pdf=null;
    if(file.type==='application/pdf'||/\.pdf$/i.test(file.name)){
@@ -34,12 +41,14 @@ export function setupPlanImport({onBuild,onOpen,onClose,loadPDF=()=>import(PDF_B
     lib.GlobalWorkerOptions.workerSrc=PDF_BASE+'build/pdf.worker.mjs';
     pdfTask=lib.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,cMapUrl:PDF_BASE+'cmaps/',cMapPacked:true,standardFontDataUrl:PDF_BASE+'standard_fonts/'});
     pdfTask.onPassword=()=>{pdfTask.destroy();};pdf=await pdfTask.promise;if(id!==epoch)return;
-    $('#planPage').replaceChildren();for(let i=1;i<=pdf.numPages;i++){const o=document.createElement('option');o.value=i;o.textContent=`${i} / ${pdf.numPages} ページ`;$('#planPage').append(o);}$('#planPage').value='1';$('#planPageRow').hidden=false;await renderPage();return;
+    $('#planPage').replaceChildren();for(let i=1;i<=pdf.numPages;i++){const o=document.createElement('option');o.value=i;o.textContent=`${i} / ${pdf.numPages} ページ`;$('#planPage').append(o);}$('#planPageRow').hidden=false;
+    const chosen=await chooseFloorPlanPage(pdf,(n,total)=>status(`平面図のページを探しています… ${n}/${total}`),()=>id===epoch);if(id!==epoch)return;
+    $('#planPage').value=String(chosen.pageNumber);await renderPage({auto:chosen.matched||pdf.numPages===1});return;
    }
    if(!/^image\/(png|jpeg|webp)$/.test(file.type)&&!(/\.(png|jpe?g|webp)$/i.test(file.name)))throw Error('PDF・JPG・PNG・WebPに対応しています。');
    const url=URL.createObjectURL(file);
    try{const img=new Image();img.src=url;await img.decode();if(id!==epoch)return;if(!img.naturalWidth||img.naturalWidth*img.naturalHeight>50000000)throw Error('画像が大きすぎます。縮小して読み込んでください。');const scale=Math.min(1,1200/Math.max(img.naturalWidth,img.naturalHeight));source.width=Math.max(8,Math.round(img.naturalWidth*scale));source.height=Math.max(8,Math.round(img.naturalHeight*scale));sx.fillStyle='white';sx.fillRect(0,0,source.width,source.height);sx.drawImage(img,0,0,source.width,source.height);}finally{URL.revokeObjectURL(url);}
-   draw();detect();
+   draw();detect();buildPreview(true);
   }catch(e){status('読み込めませんでした。'+(e.message||'PDFは通信・パスワード保護の有無も確認してください。'));}finally{if(id===epoch)setBusy(false);}
  }
  function point(e){const r=canvas.getBoundingClientRect();return {x:Math.max(0,Math.min(source.width-1,(e.clientX-r.left)*source.width/r.width)),y:Math.max(0,Math.min(source.height-1,(e.clientY-r.top)*source.height/r.height))};}
@@ -69,7 +78,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,loadPDF=()=>import(PDF_B
  $('#planTool').onchange=()=>{pending=null;draw();status('図面上をタップして編集します。切抜・壁追加・実寸指定は2点を選びます。');};
  $('#planUndo').onclick=()=>{if(!undo.length)return;redo.push(JSON.stringify(lines));lines=JSON.parse(undo.pop());pending=null;draw();};
  $('#planRedo').onclick=()=>{if(!redo.length)return;undo.push(JSON.stringify(lines));lines=JSON.parse(redo.pop());pending=null;draw();};
- $('#planBuild').onclick=()=>{try{const d=makePlanDesign(lines,source.width,source.height,{name:$('#planName').value,width:+$('#planWidth').value,height:+$('#planHeight').value,thickness:+$('#planThickness').value,roof:$('#planRoof').value});onBuild(d);dialog.close();}catch(e){status(e.message);}};
+ $('#planBuild').onclick=()=>buildPreview(false);
  $('#openPlanImport').onclick=()=>{onOpen();dialog.showModal();};$('#closePlanImport').onclick=()=>dialog.close();dialog.addEventListener('close',onClose);
  source.width=source.height=1;sx.fillStyle='white';sx.fillRect(0,0,1,1);draw();$('#planDetect').disabled=true;
 }

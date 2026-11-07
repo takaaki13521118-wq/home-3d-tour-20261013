@@ -24,3 +24,18 @@ const pdf=new Blob(['pdf'],{type:'application/pdf'});pdf.name='plan.pdf';await $
 $('#planPage').value='2';await $('#planPage').onchange();assert.equal($('#planBuild').disabled,false);
 const invalid=new Blob(['invalid'],{type:'application/zip'});invalid.name='test.zip';await $('#planFile').onchange({target:{files:[invalid],value:'file'}});assert.equal($('#planBuild').disabled,true);assert.match($('#planStatus').textContent,/読み込めません/);
 console.log('PASS: image/PDF upload wiring, page selection, editing, undo/redo, scale, model build and failure state');
+// Automatic path: no build-button click is required after image selection.
+$('#planAutoPreview').checked=true;$('#openPlanImport').onclick();result=null;
+await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal(result?.version,2);assert.equal($('#planDialog').open,false);assert.equal(result.width,10); // new source never inherits previous calibration
+// A multi-page PDF with no readable title stays open rather than showing an arbitrary page as a house.
+$('#openPlanImport').onclick();result=null;
+await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal(result,null);assert.equal($('#planDialog').open,true);assert.match($('#planStatus').textContent,/特定できません/);
+$('#planPage').value='2';await $('#planPage').onchange();assert.equal(result?.version,2);assert.equal($('#planDialog').open,false);
+// Readable title selects the floor-plan page and generates the model automatically.
+pdfLib.getDocument=()=>({destroy:async()=>{},promise:Promise.resolve({numPages:3,getPage:async n=>({getTextContent:async()=>({items:[{str:n===2?'１階 平面詳細図':'立面図'}]}),getViewport:()=>({width:240,height:180}),render({canvasContext}){canvasContext.drawImage({data:pixels()});return {promise:Promise.resolve(),cancel(){}};}})})});
+$('#openPlanImport').onclick();result=null;
+await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal($('#planPage').value,'2');assert.equal(result?.version,2);assert.equal($('#planDialog').open,false);
+// Opting out preserves review-before-build behaviour.
+$('#planAutoPreview').checked=false;$('#openPlanImport').onclick();result=null;
+await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal(result,null);assert.equal($('#planDialog').open,true);
+console.log('PASS: automatic image/PDF generation, PDF-page fallback, calibration reset and manual-review option');

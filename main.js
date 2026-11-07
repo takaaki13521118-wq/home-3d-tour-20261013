@@ -1,4 +1,4 @@
-import {setupPlanImport} from './plan-import.mjs?v=20261107-plan';
+import {setupPlanImport} from './plan-import.mjs?v=20261107-autoplan';
 import {planSolids,planSpawn} from './plan-core.mjs';
 import * as T from 'three';
 import {bindJoystick} from './joystick.mjs?v=20261107-level';
@@ -174,4 +174,4 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)resetInput(
 
 if(location.hash.startsWith('#design=')){try{const d=validateDesign(JSON.parse(decodeURIComponent(location.hash.slice(8))));fillDesign(d);buildDesign(d);}catch(e){showToast('共有モデルを読み込めませんでした。');}}
 
-setupPlanImport({onBuild:d=>{buildDesign(d);showToast('図面から3Dモデルを作成しました');},onOpen:()=>{planDialogOpen=true;resetInput();orbit.enabled=false;},onClose:()=>{planDialogOpen=false;resetInput();orbit.enabled=mode!=='inside';}});
+setupPlanImport({onBuild:(d,{automatic=false}={})=>{buildDesign(d);showToast(automatic?'概略3Dを自動生成しました。メニューから壁線・実寸を確認できます。':'図面から3Dモデルを更新しました');},onOpen:()=>{planDialogOpen=true;resetInput();orbit.enabled=false;},onClose:()=>{planDialogOpen=false;resetInput();orbit.enabled=mode!=='inside';}});

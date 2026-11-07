@@ -17,6 +17,7 @@ jobs:
           node tests/core.test.mjs
           node tests/joystick.test.mjs
           node tests/plan.test.mjs
+          node tests/plan-pages.test.mjs
           node tests/plan-import.test.mjs
           node tests/runtime.test.mjs
       - name: Install pinned PDF renderer for verification

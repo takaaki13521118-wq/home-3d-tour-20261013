@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {floorPlanScore,chooseFloorPlanPage} from '../plan-pages.mjs';
+assert(floorPlanScore('１ 階 平 面 詳 細 図')>floorPlanScore('平面図'));
+assert.equal(floorPlanScore('配置図・立面図・仕様書'),0);
+assert(floorPlanScore('GROUND FLOOR PLAN')>0);
+const fromTexts=texts=>({numPages:texts.length,getPage:async n=>({getTextContent:async()=>({items:[{str:texts[n-1]}]})})});
+assert.deepEqual(await chooseFloorPlanPage(fromTexts(['配置図','1階 平面詳細図','立面図'])),{pageNumber:2,matched:true,scanned:3});
+assert.deepEqual(await chooseFloorPlanPage(fromTexts(['',''])),{pageNumber:1,matched:false,scanned:2});
+assert.equal((await chooseFloorPlanPage(fromTexts(Array(25).fill('')))).scanned,20);
+assert.equal((await chooseFloorPlanPage(fromTexts(['平面図']),()=>{},()=>false)).cancelled,true);
+const unreadable={numPages:2,getPage:async()=>({getTextContent:async()=>{throw Error('No text');}})};assert.equal((await chooseFloorPlanPage(unreadable)).matched,false);
+console.log('PASS: floor-plan title matching, first-floor preference, manual fallback, scan cap and cancellation');
