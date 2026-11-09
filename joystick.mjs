@@ -5,6 +5,14 @@ export function stickVector(x,y,deadZone=.05){
  const strength=(Math.min(1,length)-deadZone)/(1-deadZone);
  return {x:x/length*strength,y:y/length*strength};
 }
+// Give a fully tilted walking stick a longer stride while preserving precise small moves.
+export function walkingVector(keyForward,keySide,stickX,stickY){
+ const strength=Math.min(1,Math.hypot(stickX,stickY));
+ const stride=1+.55*strength*strength;
+ const forward=keyForward-stickY*stride,side=keySide+stickX*stride;
+ const scale=Math.max(1,Math.hypot(forward,side)/stride);
+ return {forward:forward/scale,side:side/scale};
+}
 export function bindJoystick(element,knob,onChange,isEnabled,options={}){
  let pointer=null,originX=0,originY=0,radius=38;
  let targetX=0,targetY=0,x=0,y=0;
@@ -26,7 +34,7 @@ export function bindJoystick(element,knob,onChange,isEnabled,options={}){
  element.onpointerdown=e=>{
   if(!isEnabled()||pointer!==null||(e.button!==undefined&&e.button!==0))return;
   e.preventDefault();reset();
-  const r=element.getBoundingClientRect();radius=Math.max(1,Math.min(r.width,r.height)*.36);
+  const r=element.getBoundingClientRect();radius=Math.max(1,Math.min(r.width,r.height)*(options.reach??.36));
   // Walking uses a touch-relative origin; looking uses the visible centre for symmetric left/right response.
   originX=options.centered?r.left+r.width/2:e.clientX;originY=options.centered?r.top+r.height/2:e.clientY;pointer=e.pointerId;element.setPointerCapture(pointer);element.classList?.add('engaged');if(options.centered)setTarget(e);
  };

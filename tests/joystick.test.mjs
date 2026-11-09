@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
-import {bindJoystick,stickVector} from '../joystick.mjs';
+import {bindJoystick,stickVector,walkingVector} from '../joystick.mjs';
 assert.deepEqual(stickVector(.02,.02),{x:0,y:0});
 assert.deepEqual(stickVector(1,0),{x:1,y:0});
 assert(stickVector(.25,0).x<.25); // fine aiming near the centre
 assert(stickVector(.25,0).x>.18); // short thumb movement still responds
 assert(Math.abs(Math.hypot(...Object.values(stickVector(3,4)))-1)<1e-10);
+assert.equal(walkingVector(0,0,0,-1).forward,1.55); // full tilt travels 55% farther per second
+assert(walkingVector(0,0,0,-.3).forward<.32); // small tilt remains precise
+assert(Math.abs(Math.hypot(...Object.values(walkingVector(0,0,1,-1)))-1.55)<1e-10); // diagonal does not accelerate further
+assert(Math.abs(Math.hypot(...Object.values(walkingVector(1,1,0,0)))-1)<1e-10); // keyboard pace is unchanged
 function surface(){const classes=new Set();return {style:{},captured:new Set(),classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c)},addEventListener(){},setPointerCapture(id){this.captured.add(id)},hasPointerCapture(id){return this.captured.has(id)},releasePointerCapture(id){this.captured.delete(id);this.onlostpointercapture({pointerId:id})},getBoundingClientRect(){return {left:0,top:0,width:100,height:100}}};}
 const event=(pointerId,clientX,clientY,button=0)=>({pointerId,clientX,clientY,button,preventDefault(){}});
 const left=surface(),right=surface(),leftKnob=surface(),rightKnob=surface();let walk,look,enabled=true;
@@ -24,6 +28,7 @@ right.onpointerdown(event(21,50,50));right.onpointermove(event(21,90,50));b.upda
 left.onpointerdown(event(11,50,50));right.onpointerdown(event(22,50,50));a.reset();b.reset();assert.deepEqual(walk,{x:0,y:0});assert.deepEqual(look,{x:0,y:0});
 enabled=false;right.onpointerdown(event(23,100,50));assert.equal(right.captured.size,0);
 enabled=true;right.onpointerdown(event(24,100,50,2));assert.equal(right.captured.size,0);
+const shortReach=surface();let shortValue=0;const shortControl=bindJoystick(shortReach,surface(),(x,y)=>shortValue=y,()=>true,{reach:.30});shortReach.onpointerdown(event(31,50,70));shortReach.onpointermove(event(31,50,40));shortControl.update(.5);assert.equal(shortValue,-1);shortControl.reset();
 // Same filter response at 30, 60 and 120 Hz; reversals pass continuously through zero.
 const samples=[];
 for(const fps of [30,60,120]){
