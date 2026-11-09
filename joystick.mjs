@@ -2,13 +2,13 @@
 export function stickVector(x,y,deadZone=.05){
  const length=Math.hypot(x,y);
  if(length<=deadZone)return {x:0,y:0};
- const strength=Math.pow((Math.min(1,length)-deadZone)/(1-deadZone),1.35);
+ const strength=(Math.min(1,length)-deadZone)/(1-deadZone);
  return {x:x/length*strength,y:y/length*strength};
 }
 export function bindJoystick(element,knob,onChange,isEnabled,options={}){
  let pointer=null,originX=0,originY=0,radius=38;
  let targetX=0,targetY=0,x=0,y=0;
- function release(){const previous=pointer;pointer=null;if(previous!==null&&element.hasPointerCapture?.(previous))element.releasePointerCapture(previous);}
+ function release(){const previous=pointer;pointer=null;element.classList?.remove('engaged');if(previous!==null&&element.hasPointerCapture?.(previous))element.releasePointerCapture(previous);}
  function reset(){targetX=targetY=x=y=0;release();onChange(0,0);knob.style.transform='';}
  function update(dt){
   if(!isEnabled()){if(pointer!==null||x||y)reset();return;}
@@ -28,7 +28,7 @@ export function bindJoystick(element,knob,onChange,isEnabled,options={}){
   e.preventDefault();reset();
   const r=element.getBoundingClientRect();radius=Math.max(1,Math.min(r.width,r.height)*.36);
   // Walking uses a touch-relative origin; looking uses the visible centre for symmetric left/right response.
-  originX=options.centered?r.left+r.width/2:e.clientX;originY=options.centered?r.top+r.height/2:e.clientY;pointer=e.pointerId;element.setPointerCapture(pointer);if(options.centered)setTarget(e);
+  originX=options.centered?r.left+r.width/2:e.clientX;originY=options.centered?r.top+r.height/2:e.clientY;pointer=e.pointerId;element.setPointerCapture(pointer);element.classList?.add('engaged');if(options.centered)setTarget(e);
  };
  element.onpointermove=e=>{
   if(e.pointerId!==pointer)return;
