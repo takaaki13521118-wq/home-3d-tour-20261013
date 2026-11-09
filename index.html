@@ -35,7 +35,8 @@ body.walkMode .panel:not(.collapsed){top:78px;max-height:calc(100dvh - 95px)}
 #levelView{bottom:calc(100% + 63px)}
 #joystick.engaged{box-shadow:0 0 0 6px #607d6755}
 #lookJoystick.engaged{box-shadow:0 0 0 6px #587c9a55}
-@media(max-width:700px){:root{--stick-size:clamp(108px,34vw,134px)}}
+@media(max-width:700px){:root{--stick-size:clamp(84px,23vw,96px)}#joystick{background:#ffffff55}#lookJoystick{background:#edf6ff66}#joystick span,#lookJoystick span{font-size:10px}#levelView,#turnAround{right:0;width:102px;min-height:44px;padding:7px 8px;font-size:11px}}
+@media(max-height:500px) and (orientation:landscape){:root{--stick-size:88px}}
 #routeToggle{display:none;position:absolute;top:26px;right:310px;z-index:2;box-shadow:0 4px 20px #26382920;background:#fffef6}#routeToggle.active{background:#304c3d;color:#fff}.panel{z-index:3}@media(max-width:700px){#routeToggle{top:85px;right:15px}}
 </style><script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script></head><body>
 <div id="loading">住まいを立体にしています…</div><header><small>3D HOUSE EXPLORER</small><h1>住まいを歩く</h1><p>片流れ屋根の平屋 · 約10.01 × 8.65 m</p></header><div class="north" id="compass">↑ 北</div><button id="shareQuick" class="quickShare">LINEで共有</button><button id="togglePanel" aria-controls="panel" aria-expanded="true">メニュー</button>
