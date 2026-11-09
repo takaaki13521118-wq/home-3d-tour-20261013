@@ -176,8 +176,8 @@ $('#walkSpeed').addEventListener('input',()=>{$('#walkSpeedValue').textContent=`
 updateDesignUI();
 
 joystickControllers.push(
- bindJoystick($('#joystick'),$('#joyKnob'),(x,y)=>joy.set(x,y),()=>mode==='inside',{reach:.30}),
- bindJoystick($('#lookJoystick'),$('#lookKnob'),(x,y)=>lookJoy.set(x,y),()=>mode==='inside',{centered:true,horizontalOnly:()=>!verticalLookEnabled()})
+ bindJoystick($('#joystick'),$('#joyKnob'),(x,y)=>joy.set(x,y),()=>mode==='inside',{reach:.26}),
+ bindJoystick($('#lookJoystick'),$('#lookKnob'),(x,y)=>lookJoy.set(x,y),()=>mode==='inside',{reach:.29,centered:true,horizontalOnly:()=>!verticalLookEnabled()})
 );
 $('#levelView').onclick=resetView;
 $('#verticalLook').onchange=()=>{resetInput();if(!verticalLookEnabled())pitch=REST_PITCH;if(mode==='inside')indoorLook();};

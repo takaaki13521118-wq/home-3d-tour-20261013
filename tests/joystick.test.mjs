@@ -28,7 +28,7 @@ right.onpointerdown(event(21,50,50));right.onpointermove(event(21,90,50));b.upda
 left.onpointerdown(event(11,50,50));right.onpointerdown(event(22,50,50));a.reset();b.reset();assert.deepEqual(walk,{x:0,y:0});assert.deepEqual(look,{x:0,y:0});
 enabled=false;right.onpointerdown(event(23,100,50));assert.equal(right.captured.size,0);
 enabled=true;right.onpointerdown(event(24,100,50,2));assert.equal(right.captured.size,0);
-const shortReach=surface();let shortValue=0;const shortControl=bindJoystick(shortReach,surface(),(x,y)=>shortValue=y,()=>true,{reach:.30});shortReach.onpointerdown(event(31,50,70));shortReach.onpointermove(event(31,50,40));shortControl.update(.5);assert.equal(shortValue,-1);shortControl.reset();
+const shortReach=surface();let shortValue=0;const shortControl=bindJoystick(shortReach,surface(),(x,y)=>shortValue=y,()=>true,{reach:.26});shortReach.onpointerdown(event(31,50,70));shortReach.onpointermove(event(31,50,44));shortControl.update(.5);assert.equal(shortValue,-1);shortControl.reset();
 // Same filter response at 30, 60 and 120 Hz; reversals pass continuously through zero.
 const samples=[];
 for(const fps of [30,60,120]){
