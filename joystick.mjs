@@ -5,11 +5,11 @@ export function stickVector(x,y,deadZone=.05){
  const strength=(Math.min(1,length)-deadZone)/(1-deadZone);
  return {x:x/length*strength,y:y/length*strength};
 }
-// Give a fully tilted walking stick a longer stride while preserving precise small moves.
-export function walkingVector(keyForward,keySide,stickX,stickY){
- const strength=Math.min(1,Math.hypot(stickX,stickY));
+// Touch movement gets a longer stride while keyboard movement keeps its usual pace.
+export function walkingVector(keyForward,keySide,touchX,touchY){
+ const strength=Math.min(1,Math.hypot(touchX,touchY));
  const stride=1+.55*strength*strength;
- const forward=keyForward-stickY*stride,side=keySide+stickX*stride;
+ const forward=keyForward-touchY*stride,side=keySide+touchX*stride;
  const scale=Math.max(1,Math.hypot(forward,side)/stride);
  return {forward:forward/scale,side:side/scale};
 }

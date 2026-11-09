@@ -5,7 +5,7 @@ assert.deepEqual(stickVector(1,0),{x:1,y:0});
 assert(stickVector(.25,0).x<.25); // fine aiming near the centre
 assert(stickVector(.25,0).x>.18); // short thumb movement still responds
 assert(Math.abs(Math.hypot(...Object.values(stickVector(3,4)))-1)<1e-10);
-assert.equal(walkingVector(0,0,0,-1).forward,1.55); // full tilt travels 55% farther per second
+assert.equal(walkingVector(0,0,0,-1).forward,1.55); // held touch control travels 55% farther per second
 assert(walkingVector(0,0,0,-.3).forward<.32); // small tilt remains precise
 assert(Math.abs(Math.hypot(...Object.values(walkingVector(0,0,1,-1)))-1.55)<1e-10); // diagonal does not accelerate further
 assert(Math.abs(Math.hypot(...Object.values(walkingVector(1,1,0,0)))-1)<1e-10); // keyboard pace is unchanged
