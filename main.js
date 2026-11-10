@@ -49,11 +49,12 @@ I(1.365,-3.64,1.365,-.91,[door(2.22)]);I(1.365,-.91,5.005,-.91,[door(2,1.4)]);I(
 box(1.8,2.15,.55,-4.05,F+1.075,-.54,ivory,contents);for(let x=-4.8;x<-3.25;x+=.4)box(.013,2.12,.025,x,F+1.07,-.255,trim,contents);
 // Furniture symbols visible in the supplied floor plan, modeled approximately.
 const fabric=mat('#e1d9c9'),counter=mat('#eeeae0'),metal=mat('#858c86',{metalness:.65,roughness:.3});
-box(2.5,.32,.92,-2.55,F+.25,2.9,fabric,contents);box(2.5,.65,.18,-2.55,F+.58,3.27,fabric,contents);for(let x of [-3.7,-1.4])box(.18,.52,.9,x,F+.48,2.9,fabric,contents);for(let x of [-3.3,-2.55,-1.8])box(.7,.13,.68,x,F+.46,2.82,white,contents);box(1.35,.07,.7,-2.55,F+.4,1.66,wood,contents);for(let x of [-3.1,-2])for(let z of [1.44,1.88])box(.06,.38,.06,x,F+.19,z,dark,contents);
+// The plan shows a chaise joined to the sofa, not a separate coffee table.
+box(2.5,.32,.92,-2.55,F+.25,2.9,fabric,contents);box(2.5,.65,.18,-2.55,F+.58,3.27,fabric,contents);for(let x of [-3.7,-1.4])box(.18,.52,.9,x,F+.48,2.9,fabric,contents);for(let x of [-3.3,-2.55,-1.8])box(.7,.13,.68,x,F+.46,2.82,white,contents);box(.86,.32,1.45,-1.74,F+.25,2.25,fabric,contents);box(.72,.13,1.2,-1.74,F+.46,2.25,white,contents);
 box(.40,.42,1.8,-4.71,F+.21,1.62,wood,contents);box(.07,.77,1.35,-4.70,F+1,1.62,mat('#1f2928'),contents);
-box(1.3,.045,1.0,-.55,F+.75,.7,wood,contents);for(let x of [-1.08,-.02])for(let z of [.30,1.1])box(.05,.74,.05,x,F+.37,z,wood,contents);
+box(1.0,.045,1.7,-.55,F+.75,.7,wood,contents);for(let x of [-.97,-.13])for(let z of [0,1.4])box(.05,.74,.05,x,F+.37,z,wood,contents);
 function chair(x,z,rot){const g=new T.Group();g.position.set(x,F,z);g.rotation.y=rot;contents.add(g);box(.42,.07,.42,0,.45,0,wood,g);box(.42,.4,.055,0,.65,.2,wood,g);for(let xx of [-.16,.16])for(let zz of [-.16,.16])box(.035,.43,.035,xx,.215,zz,wood,g);}
-chair(-1.48,.7,Math.PI/2);chair(.38,.7,-Math.PI/2);chair(-.55,1.46,0);
+for(const z of [.15,1.25]){chair(-1.38,z,Math.PI/2);chair(.28,z,-Math.PI/2);}
 box(2.5,.83,.64,-.92,F+.415,-.69,ivory,contents);box(2.6,.045,.69,-.92,F+.85,-.69,counter,contents);box(.62,.018,.44,-.27,F+.88,-.68,metal,contents);box(.51,.022,.33,-.27,F+.89,-.68,mat('#59625c'),contents);box(.03,.25,.03,-.27,F+1.01,-.94,metal,contents);box(.19,.035,.035,-.18,F+1.12,-.94,metal,contents);box(.55,.025,.48,-1.74,F+.887,-.69,dark,contents);
 for(let x of [-1.87,-1.60]){const m=new T.Mesh(new T.CylinderGeometry(.085,.085,.013,24),metal);m.position.set(x,F+.907,-.69);contents.add(m);}box(.66,.25,.65,-1.74,2.56,-.7,metal,contents);box(.27,.42,.27,-1.74,2.88,-.7,metal,contents);
 function bed(x,z,colour){box(1.16,.25,2.0,x,F+.15,z,wood,contents);box(1.1,.2,1.95,x,F+.37,z,white,contents);box(1.12,.1,1.3,x,F+.51,z+.28,mat(colour),contents);box(.78,.12,.4,x,F+.53,z-.70,white,contents);box(1.2,.9,.10,x,F+.45,z-1.0,wood,contents);}
