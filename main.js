@@ -47,7 +47,7 @@ I(-2.275,-1.82,1.365,-1.82,[door(.90)]);I(-.455,-3.64,-.455,-1.82,[door(1.25,.7)
 I(1.365,-3.64,1.365,-.91,[door(2.22)]);I(1.365,-.91,5.005,-.91,[door(2,1.4)]);I(1.365,0,5.005,0);I(2.275,0,2.275,.91);I(2.275,.91,5.005,.91,[door(1.36,1.5)]);I(1.365,.91,1.365,3.64,[door(.57)]);I(1.365,.91,2.275,.91);I(1.365,-.91,1.365,0);
 // Living room storage.
 box(1.8,2.15,.55,-4.05,F+1.075,-.54,ivory,contents);for(let x=-4.8;x<-3.25;x+=.4)box(.013,2.12,.025,x,F+1.07,-.255,trim,contents);
-// Furniture: representative placement, dimensions in meters.
+// Furniture symbols visible in the supplied floor plan, modeled approximately.
 const fabric=mat('#e1d9c9'),counter=mat('#eeeae0'),metal=mat('#858c86',{metalness:.65,roughness:.3});
 box(2.5,.32,.92,-2.55,F+.25,2.9,fabric,contents);box(2.5,.65,.18,-2.55,F+.58,3.27,fabric,contents);for(let x of [-3.7,-1.4])box(.18,.52,.9,x,F+.48,2.9,fabric,contents);for(let x of [-3.3,-2.55,-1.8])box(.7,.13,.68,x,F+.46,2.82,white,contents);box(1.35,.07,.7,-2.55,F+.4,1.66,wood,contents);for(let x of [-3.1,-2])for(let z of [1.44,1.88])box(.06,.38,.06,x,F+.19,z,dark,contents);
 box(.40,.42,1.8,-4.71,F+.21,1.62,wood,contents);box(.07,.77,1.35,-4.70,F+1,1.62,mat('#1f2928'),contents);
@@ -55,10 +55,10 @@ box(1.3,.045,1.0,-.55,F+.75,.7,wood,contents);for(let x of [-1.08,-.02])for(let 
 function chair(x,z,rot){const g=new T.Group();g.position.set(x,F,z);g.rotation.y=rot;contents.add(g);box(.42,.07,.42,0,.45,0,wood,g);box(.42,.4,.055,0,.65,.2,wood,g);for(let xx of [-.16,.16])for(let zz of [-.16,.16])box(.035,.43,.035,xx,.215,zz,wood,g);}
 chair(-1.48,.7,Math.PI/2);chair(.38,.7,-Math.PI/2);chair(-.55,1.46,0);
 box(2.5,.83,.64,-.92,F+.415,-.69,ivory,contents);box(2.6,.045,.69,-.92,F+.85,-.69,counter,contents);box(.62,.018,.44,-.27,F+.88,-.68,metal,contents);box(.51,.022,.33,-.27,F+.89,-.68,mat('#59625c'),contents);box(.03,.25,.03,-.27,F+1.01,-.94,metal,contents);box(.19,.035,.035,-.18,F+1.12,-.94,metal,contents);box(.55,.025,.48,-1.74,F+.887,-.69,dark,contents);
-for(let x of [-1.87,-1.60]){const m=new T.Mesh(new T.CylinderGeometry(.085,.085,.013,24),metal);m.position.set(x,F+.907,-.69);contents.add(m);}box(.66,.25,.65,-1.74,2.56,-.7,metal,contents);box(.27,.42,.27,-1.74,2.88,-.7,metal,contents);box(.65,1.8,.65,.98,F+.9,-.49,mat('#c9ccbf'),contents);
+for(let x of [-1.87,-1.60]){const m=new T.Mesh(new T.CylinderGeometry(.085,.085,.013,24),metal);m.position.set(x,F+.907,-.69);contents.add(m);}box(.66,.25,.65,-1.74,2.56,-.7,metal,contents);box(.27,.42,.27,-1.74,2.88,-.7,metal,contents);
 function bed(x,z,colour){box(1.16,.25,2.0,x,F+.15,z,wood,contents);box(1.1,.2,1.95,x,F+.37,z,white,contents);box(1.12,.1,1.3,x,F+.51,z+.28,mat(colour),contents);box(.78,.12,.4,x,F+.53,z-.70,white,contents);box(1.2,.9,.10,x,F+.45,z-1.0,wood,contents);}
-bed(3.94,-2.20,'#c3ceb5');bed(3.94,2.23,'#d2bcb0');for(let z of [-2.7,1.65]){box(.65,.06,1.1,2.0,F+.72,z,wood,contents);for(let zz of [z-.44,z+.44])box(.045,.71,.045,1.75,F+.355,zz,wood,contents);}
-box(1.1,.04,1.25,-1.40,F+.025,-2.71,tile,contents);box(.86,.82,.53,-1.68,F+.41,-3.30,ivory,contents);box(.86,.06,.56,-1.68,F+.86,-3.30,white,contents);box(.56,.035,.32,-1.68,F+.895,-3.3,metal,contents);box(.8,.73,.04,-1.68,F+1.48,-3.53,glass,contents);box(.60,.86,.60,-.88,F+.43,-3.26,white,contents);
+bed(3.94,-2.20,'#c3ceb5');bed(3.94,2.23,'#d2bcb0');
+box(1.1,.04,1.25,-1.40,F+.025,-2.71,tile,contents);box(.86,.82,.53,-1.68,F+.41,-3.30,ivory,contents);box(.86,.06,.56,-1.68,F+.86,-3.30,white,contents);box(.56,.035,.32,-1.68,F+.895,-3.3,metal,contents);box(.8,.73,.04,-1.68,F+1.48,-3.53,glass,contents);
 box(1.63,.04,1.63,.46,F+.025,-2.73,mat('#d3d2c7'),contents);box(.74,.52,1.48,.90,F+.26,-2.73,white,contents);box(.59,.015,1.25,.9,F+.527,-2.73,mat('#acd1cd'),contents);box(.035,1.1,.035,-.25,F+1,-3.30,metal,contents);
 box(.46,.75,.22,-4.54,F+.375,-3.37,white,contents);box(.40,.40,.61,-4.54,F+.2,-3.07,white,contents);const seat=new T.Mesh(new T.TorusGeometry(.17,.045,12,32),white);seat.rotation.x=Math.PI/2;seat.position.set(-4.54,F+.43,-3.03);contents.add(seat);
 box(.32,1.04,1.23,-4.7,F+.52,-2.11,ivory,contents);box(.8,.045,1.3,-4.2,F+.025,-1.73,tile,contents);
@@ -77,7 +77,7 @@ function updateDesignUI(){
  $('#undoDesign').disabled=!designHistory.canUndo;$('#redoDesign').disabled=!designHistory.canRedo;
  $('#saveDesign').disabled=$('#exportDesign').disabled=!custom;$('#editCurrentPlan').disabled=custom?.d.version!==2;
  $('#designState').textContent=custom?'表示中の案を保存・書き出します。':'現在は最初の家を表示しています。';
- $('#modelNote').textContent=custom?.d.version===2?'図面の線から作った概略モデルです。床・屋根は矩形の仮形状。窓・出入口は手動指定、部屋名・階数・屋根形状の自動判定には未対応です。':custom?'入力条件から作成した平屋の概略モデルです。寸法・家具・設備は参考イメージです。':'提供図面をもとにした簡易3Dモデルです。家具・質感・細部はイメージ。屋根色は立面図のオレンジを採用しています。';
+ $('#modelNote').textContent=custom?.d.version===2?'図面の線から作った概略モデルです。床・屋根は矩形の仮形状。窓・出入口は手動指定、部屋名・階数・屋根形状の自動判定には未対応です。':custom?'入力条件から作成した平屋の概略モデルです。寸法・家具・設備は参考イメージです。':'提供図面をもとにした簡易3Dモデルです。図面で確認できた家具を簡略表示しています。形・寸法・質感は参考です。';
  const summary=$('#areaSummary');summary.replaceChildren();
  if(custom){const total=document.createElement('div');total.textContent=`${custom.d.version===2?'矩形の仮床面積':'概算面積'} ${(custom.d.width*custom.d.depth).toFixed(1)} m²`;summary.append(total);const list=document.createElement('ul');list.id='roomAreas';for(const r of custom.rooms){const item=document.createElement('li');item.textContent=`${r.name}：${((r.x2-r.x1)*(r.z2-r.z1)).toFixed(1)} m²`;list.append(item);}summary.append(list);const note=document.createElement('div');note.textContent='壁厚を差し引く前の参考値です。';summary.append(note);}
 }
