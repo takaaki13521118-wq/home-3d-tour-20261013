@@ -101,10 +101,10 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
    onBuild(d,{automatic});status('3Dを生成しました。ページ・壁線・実寸を確認し、必要に応じて修正して更新してください。');$('#openPlanImport').textContent='図面を選ぶ・読取結果を修正';setBusy(false);dialog.close();
   }catch(e){status('3D化できませんでした。壁線と寸法を修正してください。'+e.message);}
  }
- async function renderPage({auto=false}={}){
+ async function renderPage({auto=false,unconfirmed=false}={}){
   const pageNumber=+$('#planPage').value;if(!pdf||!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pdf.numPages)return;
   const id=++epoch;setBusy(true);clearEdits();draw();status('PDFのページを読み込んでいます…');
-  try{const page=await pdf.getPage(pageNumber);if(id!==epoch)return;const view=page.getViewport({scale:1});const viewport=page.getViewport({scale:Math.min(2,1200/Math.max(view.width,view.height))});source.width=Math.ceil(viewport.width);source.height=Math.ceil(viewport.height);renderTask=page.render({canvasContext:sx,viewport,background:'#ffffff'});await renderTask.promise;if(id!==epoch)return;renderTask=null;clearEdits();setZoom(1);detect();if(auto)buildPreview(true);else status(`${pageNumber}ページ目を表示しました。赤い壁線と実寸を確認してから「修正を反映して3Dを表示」を押してください。`);}catch(e){if(id===epoch){clearEdits();draw();status('PDFを表示できませんでした。画像にして読み込む方法も使えます。');}}finally{if(id===epoch)setBusy(false);}
+  try{const page=await pdf.getPage(pageNumber);if(id!==epoch)return;const view=page.getViewport({scale:1});const viewport=page.getViewport({scale:Math.min(2,1200/Math.max(view.width,view.height))});source.width=Math.ceil(viewport.width);source.height=Math.ceil(viewport.height);renderTask=page.render({canvasContext:sx,viewport,background:'#ffffff'});await renderTask.promise;if(id!==epoch)return;renderTask=null;clearEdits();setZoom(1);detect();if(auto)buildPreview(true);else status(unconfirmed?'平面図と判定できませんでした。赤い壁線と実寸を確認してから「修正を反映して3Dを表示」を押してください。':`${pageNumber}ページ目を表示しました。赤い壁線と実寸を確認してから「修正を反映して3Dを表示」を押してください。`);}catch(e){if(id===epoch){clearEdits();draw();status('PDFを表示できませんでした。画像にして読み込む方法も使えます。');}}finally{if(id===epoch)setBusy(false);}
  }
  async function load(file){
   if(!file)return;if(file.size>25*1024*1024){status('25MB以下のPDF・画像・CADを選んでください。');return;}
@@ -122,7 +122,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
     $('#planPage').replaceChildren();if(!chosen.matched&&pdf.numPages>1){const option=document.createElement('option');option.value='';option.textContent='平面図のページを選んでください';$('#planPage').append(option);}
     for(let i=1;i<=pdf.numPages;i++){const o=document.createElement('option');o.value=i;o.textContent=`${i} / ${pdf.numPages} ページ`;$('#planPage').append(o);}$('#planPageRow').hidden=false;
     if(!chosen.matched&&pdf.numPages>1){$('#planPage').value='';status('平面図のページを特定できませんでした。ページを選ぶと壁線を確認できます。');return;}
-    $('#planPage').value=String(chosen.pageNumber);await renderPage({auto:true});return;
+    $('#planPage').value=String(chosen.pageNumber);await renderPage({auto:chosen.matched,unconfirmed:!chosen.matched});return;
    }
    if(!/^image\/(png|jpeg|webp)$/.test(file.type)&&!(/\.(png|jpe?g|webp)$/i.test(file.name)))throw Error('PDF・JPG・PNG・WebP・DXF・DWG・JWWに対応しています。');
    const url=URL.createObjectURL(file);

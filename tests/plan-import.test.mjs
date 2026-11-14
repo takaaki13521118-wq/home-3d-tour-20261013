@@ -32,6 +32,11 @@ await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal
 $('#openPlanImport').onclick();result=null;
 await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal(result,null);assert.equal($('#planDialog').open,true);assert.match($('#planStatus').textContent,/特定できません/);
 $('#planPage').value='2';await $('#planPage').onchange();assert.equal(result,null);assert.equal($('#planDialog').open,true);$('#planBuild').onclick();assert.equal(result?.version,2);assert.equal($('#planDialog').open,false);
+// A single-page PDF without floor-plan text also needs review before 3D generation.
+pdfLib.getDocument=()=>({destroy:async()=>{},promise:Promise.resolve({numPages:1,getPage:async()=>({getTextContent:async()=>({items:[{str:'照明計画'}]}),getViewport:()=>({width:240,height:180}),render({canvasContext}){canvasContext.drawImage({data:pixels()});return {promise:Promise.resolve(),cancel(){}};}})})});
+$('#openPlanImport').onclick();result=null;
+await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal(result,null);assert.equal($('#planDialog').open,true);assert.equal($('#planPage').value,'1');assert.equal($('#planBuild').disabled,false);assert.match($('#planStatus').textContent,/平面図と判定できませんでした/);
+$('#planBuild').onclick();assert.equal(result?.version,2);assert.equal($('#planDialog').open,false);
 // Readable title selects the floor-plan page and generates the model automatically.
 pdfLib.getDocument=()=>({destroy:async()=>{},promise:Promise.resolve({numPages:3,getPage:async n=>({getTextContent:async()=>({items:[{str:n===2?'１階 平面詳細図':'立面図'}]}),getViewport:()=>({width:240,height:180}),render({canvasContext}){canvasContext.drawImage({data:pixels()});return {promise:Promise.resolve(),cancel(){}};}})})});
 $('#openPlanImport').onclick();result=null;
