@@ -2,7 +2,7 @@ import {shareURL,designFromHash} from './share-codec.mjs';
 import {setupDesignLibrary} from './design-library-ui.mjs';
 import {setupPlanImport} from './plan-import.mjs?v=20261114-unmatched-pdf';
 import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261107-qa-fixes';
-import {findWalkRoute} from './route-core.mjs?v=20261109-routes';
+import {findWalkRoute} from './route-core.mjs?v=20261114-route-clear';
 import * as T from 'three';
 import {bindJoystick,walkingVector} from './joystick.mjs?v=20261109-longer-walk';
 import {validateDesign,layoutRooms,slideMove,createDesignHistory,interiorStartRoom} from './house-core.mjs?v=20261107-cad';

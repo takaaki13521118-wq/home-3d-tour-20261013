@@ -6,7 +6,7 @@ export function findWalkRoute(start,end,{minX,maxX,minZ,maxZ,walkable,step=.25}=
  if(size>40000)throw Error('動線の探索範囲が広すぎます。');
  const point=id=>({x:minX+(id%cols)*step,z:minZ+Math.floor(id/cols)*step});
  const cache=new Int8Array(size).fill(-1),allowed=id=>{if(cache[id]<0){const p=point(id);cache[id]=walkable(p.x,p.z)?1:0;}return cache[id]===1;};
- const clear=(a,b)=>{const count=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/(step*.1)));for(let i=0;i<=count;i++){const t=i/count;if(!walkable(a.x+(b.x-a.x)*t,a.z+(b.z-a.z)*t))return false;}return true;};
+ const clear=(a,b)=>{const count=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/(step*.025)));for(let i=0;i<=count;i++){const t=i/count;if(!walkable(a.x+(b.x-a.x)*t,a.z+(b.z-a.z)*t))return false;}return true;};
  const snap=p=>{const cx=Math.round((p.x-minX)/step),cz=Math.round((p.z-minZ)/step);let best=-1,score=Infinity;for(let radius=0;radius<=8;radius++){for(let dz=-radius;dz<=radius;dz++)for(let dx=-radius;dx<=radius;dx++){if(Math.max(Math.abs(dx),Math.abs(dz))!==radius)continue;const x=cx+dx,z=cz+dz;if(x<0||z<0||x>=cols||z>=rows)continue;const id=z*cols+x;if(!allowed(id))continue;const q=point(id),distance=Math.hypot(q.x-p.x,q.z-p.z);if(distance<score&&clear(p,q)){best=id;score=distance;}}if(best>=0)break;}return best;};
  const startId=snap(start),endId=snap(end);if(startId<0||endId<0)return null;
  const scores=new Float64Array(size).fill(Infinity),previous=new Int32Array(size).fill(-1),closed=new Uint8Array(size),heap=[];
