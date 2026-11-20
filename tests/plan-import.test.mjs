@@ -6,7 +6,7 @@ class Element{get selectedOptions(){return this.children.filter(o=>o.selected);}
 function pixels(){const data=new Uint8ClampedArray(240*180*4).fill(255);for(let y=20;y<160;y++)for(let x=20;x<220;x++)if(x<24||x>215||y<24||y>155){const i=(y*240+x)*4;data[i]=data[i+1]=data[i+2]=0;}return data;}
 class Canvas extends Element{constructor(){super();this.width=240;this.height=180;this.data=pixels();}getContext(){const c=this;return {drawImage(img){if(img.data)c.data=img.data.slice();},fillRect(){c.data=new Uint8ClampedArray(c.width*c.height*4).fill(255);},getImageData(x,y,w,h){const data=new Uint8ClampedArray(w*h*4);for(let j=0;j<h;j++)for(let i=0;i<w;i++){const src=((y+j)*c.width+x+i)*4;data.set(c.data.slice(src,src+4),(j*w+i)*4);}return {width:w,height:h,data};},putImageData(d){c.data=d.data.slice();},beginPath(){},moveTo(){},lineTo(){},stroke(){},arc(){},fill(){}};}}
 const elements=new Map();const $=s=>{if(!elements.has(s))elements.set(s,s==='#planCanvas'?new Canvas():new Element());return elements.get(s);};
-globalThis.document={querySelector:$,createElement:t=>t==='canvas'?new Canvas():new Element()};globalThis.Image=class{constructor(){this.naturalWidth=240;this.naturalHeight=180;this.data=pixels();}async decode(){}};
+globalThis.document={querySelector:$,createElement:t=>t==='canvas'?new Canvas():new Element()};globalThis.window={confirm:()=>true};globalThis.Image=class{constructor(){this.naturalWidth=240;this.naturalHeight=180;this.data=pixels();}async decode(){}};
 for(const [id,value]of Object.entries({planWidth:'12',planHeight:'2.6',planThickness:'.12',planRoof:'none',planThreshold:'155',planMinLength:'24',planKnownLength:'5',planTool:'erase',planDoorWidth:'.9',planWindowWidth:'1.6'}))$('#'+id).value=value;
 let result,opened=0,closed=0,currentDesign=null;
 const pdfLib={GlobalWorkerOptions:{},getDocument(){return {destroy:async()=>{},promise:Promise.resolve({numPages:2,getPage:async()=>({getViewport:()=>({width:240,height:180}),render({canvasContext}){canvasContext.drawImage({data:pixels()});return {promise:Promise.resolve(),cancel(){}};}})})};}};
@@ -23,7 +23,7 @@ $('#planTool').value='scale';click(20,20);click(220,20);assert.equal(+$('#planWi
 $('#planKnownLength').value='8';$('#planKnownLength').handlers.input();assert.equal(+$('#planWidth').value,9.6);assert.match($('#planStatus').textContent,/8 m/);
 $('#openPlanImport').onclick();const pdf=new Blob(['pdf'],{type:'application/pdf'});pdf.name='plan.pdf';await $('#planFile').onchange({target:{files:[pdf],value:'file'}});assert.equal($('#planPageRow').hidden,false);assert.equal($('#planPage').children.length,3);assert.equal($('#planBuild').disabled,true);assert.equal($('#planCount').textContent.includes('0 本'),true);
 $('#planPage').value='2';await $('#planPage').onchange();assert.equal($('#planBuild').disabled,false);assert.equal($('#planDialog').open,true);
-const invalid=new Blob(['invalid'],{type:'application/zip'});invalid.name='test.zip';await $('#planFile').onchange({target:{files:[invalid],value:'file'}});assert.equal($('#planBuild').disabled,true);assert.match($('#planStatus').textContent,/読み込めません/);
+const invalid=new Blob(['invalid'],{type:'application/zip'});invalid.name='test.zip';await $('#planFile').onchange({target:{files:[invalid],value:'file'}});assert.equal($('#planBuild').disabled,false);assert.match($('#planStatus').textContent,/読み込めません/);assert.equal($('#planCount').textContent.includes('4 本'),true);
 console.log('PASS: image/PDF upload wiring, page selection, editing, undo/redo, scale, model build and failure state');
 // Automatic path: no build-button click is required after image selection.
 $('#planAutoPreview').checked=true;$('#openPlanImport').onclick();result=null;
@@ -84,7 +84,7 @@ $('#planAutoPreview').checked=true;$('#openPlanImport').onclick();result=null;
 let pendingLoad=$('#planFile').onchange({target:{files:[file],value:'file'}});await tick();
 assert.equal($('#planBuild').disabled,true);assert.equal($('#planUndo').disabled,true);
 $('#closePlanImport').onclick();assert.equal($('#planFile').disabled,false);$('#openPlanImport').onclick();finishImage();await pendingLoad;
-assert.equal(result,null);assert.equal($('#planBuild').disabled,true);assert.match($('#planStatus').textContent,/中止/);
+assert.equal(result,null);assert.equal($('#planBuild').disabled,false);assert.match($('#planStatus').textContent,/中止/);
 globalThis.Image.prototype.decode=async()=>{};
 await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal(result?.version,2);
 // Closing while PDF bytes are being read must prevent creation of a late PDF task.
@@ -114,3 +114,36 @@ assert(result.walls.some(w=>w.kind==='door'&&Math.abs(Math.hypot(w.x2-w.x1,w.z2-
 // Starting a different image resets native dimensions, colour and direct-vector mode.
 $('#openPlanImport').onclick();await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal(result.wall,'#e9e4d8');assert.equal(result.width,10);assert.equal(result.depth,7.5);assert.equal($('#planDetect').disabled,false);
 console.log('PASS: restored plan editing preserves dimensions, colour, roof, diagonal walls and openings; new sources reset correctly');
+
+// A worker setup failure must preserve an edited source and retry with a fresh worker URL.
+$('#planAutoPreview').checked=false;$('#openPlanImport').onclick();
+$('#planName').value='編集中の図面';$('#planWidth').value='12.667';
+const beforeFailure=$('#planCount').textContent;
+const workingPDF=pdfLib.getDocument;
+pdfLib.getDocument=()=>({destroy:async()=>{},promise:Promise.reject(new Error('Setting up fake worker failed'))});
+await $('#planFile').onchange({target:{files:[pdf],value:'file'}});
+assert.equal($('#planName').value,'編集中の図面');assert.equal($('#planWidth').value,'12.667');assert.equal($('#planCount').textContent,beforeFailure);
+assert.match($('#planStatus').textContent,/編集内容を保持/);assert.doesNotMatch($('#planStatus').textContent,/fake worker/);
+pdfLib.getDocument=workingPDF;
+await $('#planFile').onchange({target:{files:[pdf],value:'file'}});
+assert.match(pdfLib.GlobalWorkerOptions.workerSrc,/pdf\.worker\.mjs\?retry=/);
+const afterRetry=$('#planCount').textContent;
+window.confirm=()=>false;
+await $('#planFile').onchange({target:{files:[file],value:'file'}});
+assert.equal($('#planCount').textContent,afterRetry);
+window.confirm=()=>true;
+$('#closePlanImport').onclick();
+// After design undo, reopening the editor must use the model currently on screen.
+currentDesign={...currentDesign,name:'履歴から戻した案',walls:currentDesign.walls.slice(0,-1)};
+$('#openPlanImport').onclick();
+assert.match($('#planSourceInfo').textContent,/履歴から戻した案/);
+assert.match($('#planCount').textContent,new RegExp(`${currentDesign.walls.length} 本`));
+console.log('PASS: PDF worker retry, failed-load rollback, replacement confirmation and undo editor sync');
+
+// A PDF page rendering error also rolls back the source that was being edited.
+const renderedName=$('#planName').value,renderedCount=$('#planCount').textContent;
+pdfLib.getDocument=()=>({destroy:async()=>{},promise:Promise.resolve({numPages:1,getPage:async()=>({getTextContent:async()=>({items:[{str:'平面図'}]}),getViewport:()=>({width:240,height:180}),render:()=>({promise:Promise.reject(new Error('render failed')),cancel(){}})})})});
+await $('#planFile').onchange({target:{files:[pdf],value:'file'}});
+assert.equal($('#planName').value,renderedName);assert.equal($('#planCount').textContent,renderedCount);
+assert.match($('#planStatus').textContent,/編集内容を保持/);
+console.log('PASS: PDF render failure rolls back source editing state');
