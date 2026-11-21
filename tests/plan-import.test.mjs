@@ -153,3 +153,33 @@ await $('#planFile').onchange({target:{files:[pdf],value:'file'}});
 assert.equal($('#planName').value,renderedName);assert.equal($('#planCount').textContent,renderedCount);
 assert.match($('#planStatus').textContent,/編集内容を保持/);
 console.log('PASS: PDF render failure rolls back source editing state');
+
+// Review a rectangular furniture exclusion before touching the model.
+const furniturePixels=pixels();
+for(let y=60;y<120;y++)for(let x=70;x<170;x++)if(x<74||x>=166||y<64||y>=116){const i=(y*240+x)*4;furniturePixels[i]=furniturePixels[i+1]=furniturePixels[i+2]=0;}
+imagePixels=furniturePixels;$('#planAutoPreview').checked=false;currentDesign=null;
+await $('#planFile').onchange({target:{files:[file],value:'file'}});
+assert.match($('#planCount').textContent,/8 本/);
+$('#planExclude').onclick();click(40,40);click(200,140);
+assert.equal($('#planExclusionReview').hidden,false);assert.equal($('#planBuild').disabled,true);assert.match($('#planCount').textContent,/8 本/);
+assert.match($('#planExclusionSummary').textContent,/4 区間/);
+result=null;$('#planBuild').onclick();assert.equal(result,null);
+$('#planCancelExclusion').onclick();assert.match($('#planCount').textContent,/8 本/);assert.equal($('#planBuild').disabled,false);
+click(40,40);click(200,140);$('#planApplyExclusion').onclick();assert.match($('#planCount').textContent,/4 本/);assert.match($('#planExcludedCount').textContent,/1 か所/);
+$('#planUndo').onclick();assert.match($('#planCount').textContent,/8 本/);assert.equal($('#planExcludedCount').textContent,'');
+$('#planRedo').onclick();assert.match($('#planCount').textContent,/4 本/);assert.match($('#planExcludedCount').textContent,/1 か所/);
+$('#planDetect').onclick();assert.match($('#planCount').textContent,/4 本/);assert.match($('#planExcludedCount').textContent,/1 か所/);
+$('#planShowOriginal').checked=true;$('#planShowOriginal').onchange();const noEdit=$('#planCount').textContent;
+$('#planTool').value='erase';click(21,90);assert.equal($('#planCount').textContent,noEdit); // original-only mode cannot invisibly edit
+$('#planShowOriginal').checked=false;
+// Cropping keeps the reviewed vectors and exclusion, rather than detecting furniture again.
+$('#planTool').value='crop';click(10,10);click(230,170);assert.match($('#planCount').textContent,/4 本/);assert.match($('#planExcludedCount').textContent,/1 か所/);
+$('#planDetect').onclick();assert.match($('#planCount').textContent,/4 本/);
+$('#planBuild').onclick();assert.equal(result.walls.length,4);
+// A failed replacement preserves the exclusion as well as the lines.
+await $('#planFile').onchange({target:{files:[invalid],value:'file'}});assert.match($('#planExcludedCount').textContent,/1 か所/);$('#planDetect').onclick();assert.match($('#planCount').textContent,/4 本/);
+imagePixels=pixels();await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal($('#planExcludedCount').textContent,'');
+console.log('PASS: exclusion preview/confirm/cancel, build guard, undo/redo, reanalysis, source-only view, crop preservation and failed-load rollback');
+
+$('#planExclude').onclick();click(10,10);click(60,60);assert.equal($('#planBuild').disabled,true);$('#closePlanImport').onclick();$('#openPlanImport').onclick();assert.equal($('#planExclusionReview').hidden,true);assert.equal($('#planBuild').disabled,false);
+console.log('PASS: closing an unconfirmed exclusion leaves no stale preview or build lock');

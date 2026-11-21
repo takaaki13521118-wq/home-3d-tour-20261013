@@ -23,6 +23,7 @@ jobs:
           node tests/cad.test.mjs
           node tests/cad-runtime.test.mjs
           node tests/plan.test.mjs
+          node tests/plan-review.test.mjs
           node tests/plan-reedit.test.mjs
           node tests/plan-pages.test.mjs
           node tests/plan-import.test.mjs
