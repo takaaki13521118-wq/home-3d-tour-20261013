@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {detectWalls,makePlanDesign,validatePlanDesign,planSpawn,planAllowed,closestLine,addOpening,openParallelWalls} from '../plan-core.mjs';
+import {detectWalls,makePlanDesign,validatePlanDesign,planSpawn,planAllowed,rasterReviewNeeded,closestLine,addOpening,openParallelWalls} from '../plan-core.mjs';
 import {validateDesign,createDesignHistory,interiorStartRoom,designShareURL} from '../house-core.mjs';
 const width=240,height=180,data=new Uint8ClampedArray(width*height*4).fill(255);
 function rect(x,y,w,h){for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++){const p=(j*width+i)*4;data[p]=data[p+1]=data[p+2]=0;}}
@@ -18,6 +18,10 @@ for(const [x,y,w,h] of [[20,20,200,2],[20,140,200,2],[20,20,2,122],[218,20,2,122
 assert(detectWalls({width,height,data:thinImage},{minLength:24,merge:5}).length>=4);
 const d=makePlanDesign(lines,width,height,{width:12,height:2.6});assert.equal(d.depth,9);assert.deepEqual(validateDesign(JSON.parse(JSON.stringify(d))),d);assert.equal(interiorStartRoom(d),'planWalk');
 const spawn=planSpawn(d);assert(spawn);assert(planAllowed(d,spawn.x,spawn.z));assert(!planAllowed(d,99,0));
+assert.equal(rasterReviewNeeded(lines),false);
+assert.equal(rasterReviewNeeded(Array.from({length:51},()=>lines[0])),true);
+const annotated=makePlanDesign([{x1:50,y1:40,x2:180,y2:40},{x1:50,y1:140,x2:180,y2:140},{x1:50,y1:40,x2:50,y2:140},{x1:180,y1:40,x2:180,y2:140},{x1:20,y1:0,x2:20,y2:180},{x1:220,y1:0,x2:220,y2:180}],240,180,{width:12});
+const centered=planSpawn(annotated);assert(centered&&Math.abs(centered.x)<2&&Math.abs(centered.z)<2);
 const hit=closestLine([{x1:10,y1:20,x2:210,y2:20,kind:'wall'}],100,23,5);assert.equal(hit.index,0);assert.equal(closestLine(lines,-100,-100,3),null);
 const split=addOpening({x1:10,y1:20,x2:210,y2:20,kind:'wall'},.95,30,'door');assert.equal(split.length,3);assert.equal(split[1].kind,'door');assert(Math.abs(split[1].x2-split[1].x1-30)<1e-8);
 assert.throws(()=>addOpening({x1:0,y1:0,x2:10,y2:0,kind:'wall'},.5,30,'door'));
