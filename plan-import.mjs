@@ -1,8 +1,8 @@
 import {cadVectors,cadPreview,clipCADLines} from './cad-core.mjs';
 import {readCAD} from './cad-runtime.mjs';
 import {chooseFloorPlanPage} from './plan-pages.mjs';
-import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261121-region-review';
-import {detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261121-region-review';
+import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261121-region-review-2';
+import {detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261121-region-review-2';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 let pdfModuleRetry=0;
 export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadCAD=readCAD,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs'+(pdfModuleRetry?'?retry='+pdfModuleRetry:''))}){
@@ -56,7 +56,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   for(const r of [...exclusions,...(exclusionPreview?[exclusionPreview.rect]:[])]){ctx.strokeStyle='#94631b';ctx.beginPath();ctx.moveTo(r.left,r.top);ctx.lineTo(r.right,r.top);ctx.lineTo(r.right,r.bottom);ctx.lineTo(r.left,r.bottom);ctx.lineTo(r.left,r.top);ctx.stroke();}
   }
   if(pending){ctx.fillStyle='#305cda';ctx.beginPath();ctx.arc(pending.x,pending.y,6,0,Math.PI*2);ctx.fill();}
-  $('#planCount').textContent=`検出・編集済み：${lines.length} 本（赤：壁／橙：出入口／青：窓）`;
+  $('#planCount').textContent=`検出・編集済み：${lines.length} 本（赤：壁／橙：出入口／青：窓）${pending?' ／ 1点目を選択しました。もう一方の点をタップしてください。':''}`;
   $('#planReviewTools').hidden=fromModel||!!cad||!rasterReviewNeeded(lines);
   $('#planExclusionReview').hidden=!exclusionPreview;
   $('#planExclusionSummary').textContent=exclusionPreview?`灰色の ${exclusionPreview.removed.length} 区間を壁から除外します。赤い線は残ります。実際の壁まで灰色になっていないか確認してください。除外で残る3cm未満の短い断片も除きます。`:'';
@@ -156,9 +156,9 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   const tool=$('#planTool').value;if(tool==='pan'||$('#planShowOriginal').checked)return;
   if(exclusionPreview){status('除外する線を確認し「この範囲を除外」か「キャンセル」を押してください。');return;}
   if(tool==='exclude'||tool==='crop'||tool==='wall'||tool==='scale'){
-   if(!pending){pending=p;draw();status(tool==='exclude'?'家具や畳の線を囲む、反対の角をタップしてください。':tool==='crop'?'切り抜く範囲の反対の角をタップしてください。':tool==='scale'?'長さが分かる線のもう一方の端をタップしてください。':'追加する壁のもう一方の端をタップしてください。');return;}
+   if(!pending){pending=p;draw();return;}
    const a=pending;pending=null;
-   if(tool==='exclude'){const rect=reviewRect(a,p);exclusionPreview={rect,...exclude(lines,[rect])};$('#planShowOriginal').checked=false;draw();status(exclusionPreview.removed.length?'灰色の線が除外対象です。実際の壁は囲まないでください。確認後に反映できます。':'この範囲に除外する壁線はありません。窓と出入口は保持します。');$('#planExclusionReview').scrollIntoView?.({block:'nearest',behavior:'smooth'});return;}
+   if(tool==='exclude'){const rect=reviewRect(a,p);exclusionPreview={rect,...exclude(lines,[rect])};$('#planShowOriginal').checked=false;draw();status(exclusionPreview.removed.length?'灰色の線が除外対象です。実際の壁は囲まないでください。確認後に反映できます。':'この範囲に除外する壁線はありません。窓と出入口は保持します。');$('#planExclusionReview').scrollIntoView?.({block:'nearest',behavior:'instant'});return;}
    if(tool==='crop'){
     const x=Math.floor(Math.min(a.x,p.x)),y=Math.floor(Math.min(a.y,p.y)),w=Math.floor(Math.abs(a.x-p.x)),h=Math.floor(Math.abs(a.y-p.y));if(w<30||h<30)throw Error('切り抜く範囲を広げてください。');
     const pixels=sx.getImageData(x,y,w,h);const previousWidth=source.width,previousHeight=source.height,keepScale=!!cad||fromModel||!!calibration;if(sourceAspect!==null)sourceAspect*=h/previousHeight*previousWidth/w;source.width=w;source.height=h;sx.putImageData(pixels,0,0);$('#planWidth').value=(+$('#planWidth').value*(keepScale?w/previousWidth:1)).toFixed(3);const cropped=clipCADLines(lines,x,y,w,h),croppedExclusions=cropReviewRegions(exclusions,x,y,w,h);clearEdits();lines=cropped;exclusions=croppedExclusions;safeTool();draw();status('編集した壁・開口部・除外範囲を保持して切り抜きました。'+(rasterReviewNeeded(lines)&&!cad&&!fromModel?'まだ線が多いため「線幅で絞る」を試し、赤い線を確認してください。':'赤い壁線と図面の横幅を実寸に合わせてください。')+'元に戻すには元の図面か表示中の3Dから読み直してください。');return;
@@ -179,9 +179,9 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  canvas.addEventListener('lostpointercapture',()=>{pointer=null;});
  $('#planFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';await load(file);};$('#planPage').onchange=()=>renderPage({auto:false});
  $('#planDetect').onclick=()=>{if(busy)return;try{detect();}catch(e){status(e.message);}};
- $('#planQuickCrop').onclick=()=>{$('#planTool').value='crop';$('#planTool').onchange();status('建物だけを囲むように、図面の左上と右下を順にタップしてください。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'smooth'});};
+ $('#planQuickCrop').onclick=()=>{$('#planTool').value='crop';$('#planTool').onchange();status('建物だけを囲むように、図面の左上と右下を順にタップしてください。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});};
  $('#planStrongLines').onclick=()=>{if(busy||source.width<8)return;try{const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:4});if(!candidate.length){status('太い線が見つかりません。元の赤い線を保持しました。');return;}history();lines=exclude(candidate,exclusions).lines;pending=null;exclusionPreview=null;draw();status(`線幅で ${lines.length} 本に絞りました。壁を認識した結果ではありません。家具が残ったり、必要な壁が消えたりするため、原図と照合してください。「戻す」で元に戻せます。`);}catch(e){status(e.message);}};
- $('#planExclude').onclick=()=>{if(busy||source.width<8)return;$('#planTool').value='exclude';$('#planTool').onchange();status('家具・畳・寸法線を囲む対角2点をタップしてください。壁と接する部分は小さく区切って選びます。すぐには削除されません。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'smooth'});};
+ $('#planExclude').onclick=()=>{if(busy||source.width<8)return;$('#planTool').value='exclude';$('#planTool').onchange();status('家具・畳・寸法線を囲む対角2点をタップしてください。壁と接する部分は小さく区切って選びます。すぐには削除されません。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});};
  $('#planApplyExclusion').onclick=()=>{if(busy||!exclusionPreview?.removed.length)return;history();lines=exclusionPreview.lines;exclusions.push(exclusionPreview.rect);exclusionPreview=null;draw();status('選んだ範囲の線を除外しました。原図の画像・範囲外の線・窓・出入口は保持しています。続けて別の範囲を選ぶか「戻す」で取り消せます。');};
  $('#planCancelExclusion').onclick=()=>{exclusionPreview=null;pending=null;draw();status('除外を取り消しました。線は変更していません。');};
  $('#planShowOriginal').onchange=()=>{pending=null;pointer=null;canvas.style.touchAction=$('#planShowOriginal').checked||$('#planTool').value==='pan'?'pan-x pan-y':'none';draw();};

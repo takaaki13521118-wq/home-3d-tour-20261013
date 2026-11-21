@@ -183,3 +183,6 @@ console.log('PASS: exclusion preview/confirm/cancel, build guard, undo/redo, rea
 
 $('#planExclude').onclick();click(10,10);click(60,60);assert.equal($('#planBuild').disabled,true);$('#closePlanImport').onclick();$('#openPlanImport').onclick();assert.equal($('#planExclusionReview').hidden,true);assert.equal($('#planBuild').disabled,false);
 console.log('PASS: closing an unconfirmed exclusion leaves no stale preview or build lock');
+
+$('#planExclude').onclick();const beforeFirstPointStatus=$('#planStatus').textContent;click(30,30);assert.equal($('#planStatus').textContent,beforeFirstPointStatus);assert.match($('#planCount').textContent,/1点目/);
+console.log('PASS: first-point selection does not resize the instructions above the canvas');
