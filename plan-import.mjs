@@ -1,7 +1,7 @@
 import {cadVectors,cadPreview,clipCADLines} from './cad-core.mjs';
 import {readCAD} from './cad-runtime.mjs';
 import {chooseFloorPlanPage} from './plan-pages.mjs';
-import {detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261121-import-review';
+import {detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261121-line-position';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 let pdfModuleRetry=0;
 export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadCAD=readCAD,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs'+(pdfModuleRetry?'?retry='+pdfModuleRetry:''))}){
@@ -62,7 +62,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   if(fromModel){status('この編集は3Dの壁を直接扱います。再解析は不要です。');return;}
   if(cad){applyCAD();return;}
   const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:$('#planThinLines').checked?1:2});
-  history();lines=candidate;pending=null;draw();status(rasterReviewNeeded(lines)?`${lines.length}本の線を検出しました。寸法線や家具が混ざっているため、自動3D化を止めました。「建物だけ切り抜く」で建物の対角2点を選び、不要な線を確認してください。`:(lines.length?'線を自動検出しました。寸法線や家具の線は削除し、実寸を設定して「修正を反映して3Dを表示」を押してください。':'壁の線が見つかりません。読み取り濃さを上げるか、「壁を追加」で補ってください。'));
+  history();lines=candidate;pending=null;draw();status(rasterReviewNeeded(lines)?`${lines.length}本の線を検出しました。寸法線や家具が混ざっている可能性があるため、自動3D化を止めました。「建物だけ切り抜く」で建物の対角2点を選び、不要な線を確認してください。`:(lines.length?'線を自動検出しました。寸法線や家具の線は削除し、実寸を設定して「修正を反映して3Dを表示」を押してください。':'壁の線が見つかりません。読み取り濃さを上げるか、「壁を追加」で補ってください。'));
  }
  function applyCAD(){
   try{
@@ -145,7 +145,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
    const a=pending;pending=null;
    if(tool==='crop'){
     const x=Math.floor(Math.min(a.x,p.x)),y=Math.floor(Math.min(a.y,p.y)),w=Math.floor(Math.abs(a.x-p.x)),h=Math.floor(Math.abs(a.y-p.y));if(w<30||h<30)throw Error('切り抜く範囲を広げてください。');
-    const pixels=sx.getImageData(x,y,w,h);const previousWidth=source.width,previousHeight=source.height,keepScale=!!cad||fromModel||!!calibration;if(sourceAspect!==null)sourceAspect*=h/previousHeight*previousWidth/w;source.width=w;source.height=h;sx.putImageData(pixels,0,0);$('#planWidth').value=(+$('#planWidth').value*(keepScale?w/previousWidth:1)).toFixed(3);const cropped=(cad||fromModel)?clipCADLines(lines,x,y,w,h):null;clearEdits();if(cropped){lines=cropped;draw();}else detect();safeTool();status((cad||fromModel?'壁・開口部を保持して切り抜きました。':'切り抜いて再解析しました。')+(rasterReviewNeeded(lines)&&!cad&&!fromModel?'まだ線が多いため「太い線だけ残す」を試し、赤い線を確認してください。':'赤い壁線と図面の横幅を実寸に合わせてください。')+'元に戻すには元の図面か表示中の3Dから読み直してください。');return;
+    const pixels=sx.getImageData(x,y,w,h);const previousWidth=source.width,previousHeight=source.height,keepScale=!!cad||fromModel||!!calibration;if(sourceAspect!==null)sourceAspect*=h/previousHeight*previousWidth/w;source.width=w;source.height=h;sx.putImageData(pixels,0,0);$('#planWidth').value=(+$('#planWidth').value*(keepScale?w/previousWidth:1)).toFixed(3);const cropped=(cad||fromModel)?clipCADLines(lines,x,y,w,h):null;clearEdits();if(cropped){lines=cropped;draw();}else detect();safeTool();status((cad||fromModel?'壁・開口部を保持して切り抜きました。':'切り抜いて再解析しました。')+(rasterReviewNeeded(lines)&&!cad&&!fromModel?'まだ線が多いため「線幅で絞る」を試し、赤い線を確認してください。':'赤い壁線と図面の横幅を実寸に合わせてください。')+'元に戻すには元の図面か表示中の3Dから読み直してください。');return;
    }
    if(tool==='scale'){const length=Math.hypot(a.x-p.x,a.y-p.y),unitLength=planSegmentMetres(a,p,source.width,source.height,1,sourceAspect??source.height/source.width);if(length<10||!Number.isFinite(unitLength)||unitLength<=0)throw Error('既知の長さと2点を確認してください。');calibration={unitLength};applyCalibration();return;}
    if(Math.hypot(a.x-p.x,a.y-p.y)<6)throw Error('壁の線をもう少し長くしてください。');history();const horizontal=Math.abs(p.x-a.x)>=Math.abs(p.y-a.y);lines.push({x1:a.x,y1:a.y,x2:(cad||fromModel)?p.x:horizontal?p.x:a.x,y2:(cad||fromModel)?p.y:horizontal?a.y:p.y,kind:'wall'});
@@ -164,7 +164,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  $('#planFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';await load(file);};$('#planPage').onchange=()=>renderPage({auto:false});
  $('#planDetect').onclick=()=>{if(busy)return;try{detect();}catch(e){status(e.message);}};
  $('#planQuickCrop').onclick=()=>{$('#planTool').value='crop';$('#planTool').onchange();status('建物だけを囲むように、図面の左上と右下を順にタップしてください。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'smooth'});};
- $('#planStrongLines').onclick=()=>{if(busy||source.width<8)return;try{const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:4});if(!candidate.length){status('太い線が見つかりません。元の赤い線を保持しました。');return;}history();lines=candidate;pending=null;draw();status(`太い線を ${lines.length} 本残しました。必要な細い壁が消えていないか確認してください。「戻す」で元に戻せます。`);}catch(e){status(e.message);}};
+ $('#planStrongLines').onclick=()=>{if(busy||source.width<8)return;try{const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:4});if(!candidate.length){status('太い線が見つかりません。元の赤い線を保持しました。');return;}history();lines=candidate;pending=null;draw();status(`線幅で ${lines.length} 本に絞りました。壁を認識した結果ではありません。家具が残ったり、必要な壁が消えたりするため、原図と照合してください。「戻す」で元に戻せます。`);}catch(e){status(e.message);}};
  $('#planTool').onchange=()=>{pending=null;pointer=null;const pan=$('#planTool').value==='pan';canvas.style.touchAction=pan?'pan-x pan-y':'none';canvas.style.cursor=pan?'grab':'crosshair';draw();status(pan?'図面を指で動かして表示位置を変えられます。編集する時は操作を選び直してください。':'図面上をタップして編集します。拡大後は「図面を移動」で表示位置を変えられます。');};
  $('#planZoomIn').onclick=()=>setZoom(zoom+.5);$('#planZoomOut').onclick=()=>setZoom(zoom-.5);$('#planZoomFit').onclick=()=>setZoom(1);
  $('#planUndo').onclick=()=>{if(busy||!undo.length)return;redo.push(JSON.stringify(lines));lines=JSON.parse(undo.pop());pending=null;draw();};

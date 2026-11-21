@@ -12,10 +12,10 @@ export function detectWalls(image,{threshold=155,minLength=28,merge=5,minStroke=
    let start=-1,last=-1;
    const flush=()=>{if(start<0||last-start+1<minLength)return;const end=last;
     let best=null;
-    for(let i=groups.length-1;i>=0;i--){const g=groups[i];if(row-g.lastRow>merge)continue;
-     const overlap=Math.min(end,g.end)-Math.max(start,g.start);if(overlap>=.7*Math.min(end-start,g.end-g.start)&&(!best||overlap>best.overlap))best={g,overlap};}
+    for(let i=groups.length-1;i>=0;i--){const g=groups[i];if(row-g.lastRow>2||row-g.firstRow>Math.max(8,merge)||row===g.lastRow)continue;
+     const overlap=Math.min(end,g.end)-Math.max(start,g.start);if(overlap>=.7*Math.max(end-start,g.end-g.start)&&(!best||overlap>best.overlap))best={g,overlap};}
     if(best){const g=best.g;g.sum+=row;g.count++;g.coord=g.sum/g.count;g.lastRow=row;g.start=Math.min(g.start,start);g.end=Math.max(g.end,end);}
-    else {if(groups.length>3000)throw Error('細かい線が多すぎます。建物を切り抜いてください。');groups.push({axis,coord:row,sum:row,count:1,lastRow:row,start,end});}
+    else {if(groups.length>3000)throw Error('細かい線が多すぎます。建物を切り抜いてください。');groups.push({axis,coord:row,sum:row,count:1,firstRow:row,lastRow:row,start,end});}
    };
    for(let col=0;col<cols;col++){const on=ink[axis==='h'?row*w+col:col*w+row];if(on){if(start<0)start=col;last=col;}else if(start>=0&&col-last>2){flush();start=-1;}}flush();
   }

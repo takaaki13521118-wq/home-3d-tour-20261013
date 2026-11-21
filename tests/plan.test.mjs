@@ -16,6 +16,13 @@ assert(detectWalls({width,height,data:thickImage},{minLength:24,merge:5,minStrok
 const thinImage=new Uint8ClampedArray(width*height*4).fill(255);
 for(const [x,y,w,h] of [[20,20,200,2],[20,140,200,2],[20,20,2,122],[218,20,2,122]])paint(thinImage,x,y,w,h);
 assert(detectWalls({width,height,data:thinImage},{minLength:24,merge:5}).length>=4);
+// Short, progressively shifted strokes must not drag a long wall away from its source.
+const drifting=new Uint8ClampedArray(width*height*4).fill(255);
+paint(drifting,20,20,200,4);
+for(let k=0;k<10;k++)paint(drifting,30+k*5,24+k*4,100,4);
+const stable=detectWalls({width,height,data:drifting},{minLength:24,merge:10});
+assert(stable.some(l=>l.x2-l.x1>190&&Math.abs(l.y1-21.5)<2));
+assert(!stable.some(l=>l.x2-l.x1>190&&l.y1>25));
 const d=makePlanDesign(lines,width,height,{width:12,height:2.6});assert.equal(d.depth,9);assert.deepEqual(validateDesign(JSON.parse(JSON.stringify(d))),d);assert.equal(interiorStartRoom(d),'planWalk');
 const spawn=planSpawn(d);assert(spawn);assert(planAllowed(d,spawn.x,spawn.z));assert(!planAllowed(d,99,0));
 assert.equal(rasterReviewNeeded(lines),false);
