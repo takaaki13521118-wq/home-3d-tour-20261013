@@ -1,8 +1,8 @@
 import {cadVectors,cadPreview,clipCADLines} from './cad-core.mjs';
 import {readCAD} from './cad-runtime.mjs';
 import {chooseFloorPlanPage} from './plan-pages.mjs';
-import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261121-region-review-2';
-import {detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261121-region-review-2';
+import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261121-region-review-3';
+import {detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261121-region-review-3';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 let pdfModuleRetry=0;
 export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadCAD=readCAD,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs'+(pdfModuleRetry?'?retry='+pdfModuleRetry:''))}){
@@ -16,6 +16,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   const known=+$('#planKnownLength').value;
   $('#planBuild').disabled=busy||!!exclusionPreview||cadDirty||!lines.length||!!calibration&&(!Number.isFinite(known)||known<.1||known>60||known/calibration.unitLength<1||known/calibration.unitLength>60);
   for(const id of ['planExclude','planShowOriginal','planQuickCrop','planStrongLines'])$('#'+id).disabled=busy||!ready;
+  $('#planShowOriginal').disabled=busy||!ready||fromModel;
   $('#planApplyExclusion').disabled=busy||!exclusionPreview?.removed.length;
   $('#planDetect').disabled=busy||!ready||fromModel;
   for(const id of ['planFile','planPage','cadApply','cadLayers','cadUnit','cadScale','planTool','planDoorWidth','planWindowWidth'])$('#'+id).disabled=busy;
@@ -60,7 +61,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   $('#planReviewTools').hidden=fromModel||!!cad||!rasterReviewNeeded(lines);
   $('#planExclusionReview').hidden=!exclusionPreview;
   $('#planExclusionSummary').textContent=exclusionPreview?`灰色の ${exclusionPreview.removed.length} 区間を壁から除外します。赤い線は残ります。実際の壁まで灰色になっていないか確認してください。除外で残る3cm未満の短い断片も除きます。`:'';
-  $('#planExcludedCount').textContent=exclusions.length?`除外範囲：${exclusions.length} か所（再解析でも維持・「戻す」で取り消せます）`:'';
+  $('#planExcludedCount').textContent=exclusions.length?`除外範囲：${exclusions.length} か所（再解析でも維持${undo.length?'・「戻す」で取り消せます':''}）`:'';
   const width=+$('#planWidth').value,depth=width*(sourceAspect??source.height/source.width);$('#planDimensions').textContent=source.width>=8&&Number.isFinite(width)&&Number.isFinite(depth)?`図面全体：幅 ${width.toFixed(3)} m × 奥行 ${depth.toFixed(3)} m`:'';
   controls();
  }

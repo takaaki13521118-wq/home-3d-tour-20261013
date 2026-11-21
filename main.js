@@ -1,7 +1,7 @@
 import {shareURL,designFromHash} from './share-codec.mjs';
 import {setupDesignLibrary} from './design-library-ui.mjs';
-import {setupPlanImport} from './plan-import.mjs?v=20261121-region-review-2';
-import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261121-region-review-2';
+import {setupPlanImport} from './plan-import.mjs?v=20261121-region-review-3';
+import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261121-region-review-3';
 import {findWalkRoute} from './route-core.mjs?v=20261114-route-clear';
 import * as T from 'three';
 import {bindJoystick,walkingVector} from './joystick.mjs?v=20261109-longer-walk';
