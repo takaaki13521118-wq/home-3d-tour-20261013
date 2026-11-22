@@ -15,9 +15,11 @@ export function planSpaces(d){
   for(let q=0;q<cells.length;q++){const n=cells[q],i=n%nx,j=Math.floor(n/nx);if(!i||!j||i===nx-1||j===nz-1)outside=true;
    for(const m of [i?n-1:-1,i<nx-1?n+1:-1,j?n-nx:-1,j<nz-1?n+nx:-1])if(m>=0&&!blocked[m]&&!seen[m]){seen[m]=1;cells.push(m);}}
   if(outside||cells.length*step*step<.6)continue;
-  let best=null,score=-1;for(const n of cells){const x=ox+(n%nx+.5)*step,z=oz+(Math.floor(n/nx)+.5)*step;let c=Infinity;for(const w of d.walls)c=Math.min(c,distance(w,x,z)-d.thickness/2);if(c>score){score=c;best={x,z};}}
+  const cx=cells.reduce((a,n)=>a+ox+(n%nx+.5)*step,0)/cells.length,cz=cells.reduce((a,n)=>a+oz+(Math.floor(n/nx)+.5)*step,0)/cells.length;
+  let best=null,score=-1,rank=-Infinity;for(const n of cells){const x=ox+(n%nx+.5)*step,z=oz+(Math.floor(n/nx)+.5)*step;let c=Infinity;for(const w of d.walls)c=Math.min(c,distance(w,x,z)-d.thickness/2);const weighted=c-.025*Math.hypot(x-cx,z-cz);if(weighted>rank){rank=weighted;score=c;best={x,z};}}
   if(score<.16)continue;
-  rooms.push({point:best,area:cells.length*step*step,cells,clearance:score});
+  const member=new Set(cells);let yaw=0,range=-1;for(let k=0;k<16;k++){const a=k*Math.PI/8;let r=step;for(;r<Math.max(nx,nz)*step;r+=step){const i=Math.floor((best.x-Math.sin(a)*r-ox)/step),j=Math.floor((best.z-Math.cos(a)*r-oz)/step);if(i<0||j<0||i>=nx||j>=nz||!member.has(j*nx+i))break;}if(r>range){range=r;yaw=a;}}
+  rooms.push({point:best,yaw,area:cells.length*step*step,cells,clearance:score});
  }
  rooms.sort((a,b)=>b.area-a.area);
  const result={bounds,rooms,step,nx,nz,ox,oz};cache.set(d,result);return result;

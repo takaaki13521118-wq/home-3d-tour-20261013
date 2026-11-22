@@ -1,8 +1,8 @@
-import {planSpaces,spaceAt} from './plan-space.mjs?v=20261122-spaces';
+import {planSpaces,spaceAt} from './plan-space.mjs?v=20261122-spaces2';
 import {shareURL,designFromHash} from './share-codec.mjs';
 import {setupDesignLibrary} from './design-library-ui.mjs';
-import {setupPlanImport} from './plan-import.mjs?v=20261122-spaces';
-import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261122-spaces';
+import {setupPlanImport} from './plan-import.mjs?v=20261122-spaces2';
+import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261122-spaces2';
 import {findWalkRoute} from './route-core.mjs?v=20261114-route-clear';
 import * as T from 'three';
 import {bindJoystick,walkingVector} from './joystick.mjs?v=20261109-longer-walk';
@@ -134,7 +134,7 @@ function buildPlanDesign(d,record=true){
  b(fw,.07,fd,fx,F+d.height,fz,white,lid);
  $('#spaceChoices').replaceChildren();$('.room').replaceChildren();
  const choices=space.rooms.length?space.rooms.map((r,i)=>({id:i?'planRoom'+i:'planWalk',r,name:'空間'+(i+1)})):[{id:'planWalk',r:{point:spawn},name:'室内位置を確認'}];
- for(const {id,r,name} of choices){custom.views[id]={p:[r.point.x,F+1.58,r.point.z],yaw:0,name};const button=document.createElement('button');button.dataset.room=id;button.textContent=name+'へ入る';button.onclick=()=>enter(id);$('.room').append(button);const pick=document.createElement('button');pick.textContent=name+'へ入る';pick.onclick=()=>{$('#spaceDialog').close();enter(id);};$('#spaceChoices').append(pick);}
+ for(const {id,r,name} of choices){custom.views[id]={p:[r.point.x,F+1.58,r.point.z],yaw:r.yaw??0,name};const button=document.createElement('button');button.dataset.room=id;button.textContent=name+'へ入る';button.onclick=()=>enter(id);$('.room').append(button);const pick=document.createElement('button');pick.textContent=name+'へ入る';pick.onclick=()=>{$('#spaceDialog').close();enter(id);};$('#spaceChoices').append(pick);}
  custom.fillLight=new T.PointLight(0xfff8ee,1.5,Math.max(fw,fd)*2,2);custom.fillLight.position.set(spawn.x,F+d.height-.25,spawn.z);root.add(custom.fillLight);
  if(!space.rooms.length)showToast('壁で囲まれた部屋を確認できません。間取りの床を選ぶか、壁と出入口を修正してください。');
  document.querySelector('header h1').textContent=d.name||'図面から作成';document.querySelector('header p').textContent=`図面モデル ${d.width.toFixed(1)} × ${d.depth.toFixed(1)} m`;
