@@ -20,7 +20,9 @@ export async function recognizePlan(source,{signal,onProgress=()=>{},load=()=>im
 }
 export async function pdfPlanTokens(page,viewport){
  const content=await page.getTextContent(),t=viewport.transform;if(!Array.isArray(t))return [];
- const out=[];for(const [i,item]of content.items.entries()){const a=item.transform;if(!item.str||!a)continue;const x=t[0]*a[4]+t[2]*a[5]+t[4],y=t[1]*a[4]+t[3]*a[5]+t[5],scale=Math.hypot(t[0],t[1]),h=Math.hypot(a[2],a[3])*scale,w=(item.width||Math.hypot(a[0],a[1])*item.str.length)*scale;
-  if(!Number.isFinite(x+y+w+h)||!w||!h)continue;out.push({text:item.str,line:i,confidence:100,bbox:{x0:Math.max(0,x),x1:Math.min(viewport.width,x+w),y0:Math.max(0,y-h),y1:Math.min(viewport.height,y)}});
+ const out=[];for(const [i,item]of content.items.entries()){const a=item.transform;if(!item.str||!a)continue;const size=Math.hypot(a[0],a[1]);if(!size)continue;const width=item.width||size*item.str.length,dx=a[0]/size*width,dy=a[1]/size*width;
+  const points=[[a[4],a[5]],[a[4]+dx,a[5]+dy],[a[4]+a[2],a[5]+a[3]],[a[4]+dx+a[2],a[5]+dy+a[3]]].map(([x,y])=>[t[0]*x+t[2]*y+t[4],t[1]*x+t[3]*y+t[5]]);
+  const bbox={x0:Math.max(0,Math.min(...points.map(p=>p[0]))),x1:Math.min(viewport.width,Math.max(...points.map(p=>p[0]))),y0:Math.max(0,Math.min(...points.map(p=>p[1]))),y1:Math.min(viewport.height,Math.max(...points.map(p=>p[1])))};
+  if(!Object.values(bbox).every(Number.isFinite)||bbox.x1<=bbox.x0||bbox.y1<=bbox.y0)continue;out.push({text:item.str,line:i,confidence:100,bbox});
  }return out;
 }

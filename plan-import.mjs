@@ -17,6 +17,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   const locked=busy||!!semantic?.busy;
   const ready=source.width>=8;
   const known=+$('#planKnownLength').value;
+  $('#planAutoPreview').disabled=locked||$('#planReadLabels').checked;
   $('#planBuild').disabled=locked||!!semantic?.pending||!!exclusionPreview||cadDirty||!lines.length||!!calibration&&(!Number.isFinite(known)||known<.1||known>60||known/calibration.unitLength<1||known/calibration.unitLength>60);
   for(const id of ['planDoorSpan','planExclude','planShowOriginal','planQuickCrop','planStrongLines'])$('#'+id).disabled=locked||!ready;
   $('#planShowOriginal').disabled=locked||!ready||fromModel;
@@ -122,7 +123,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   if(busy&&!automatic||semantic.busy||exclusionPreview)return;
   if(semantic.pending){status('部屋候補に確認待ちがあります。名称・範囲を確認して、採用または除外を選んでください。');return;}
   if(cadDirty){status('CAD設定を反映してから3Dを作成してください。');return;}
-  if(automatic&&(!dialog.open||!$('#planAutoPreview').checked||!lines.length||!cad&&!fromModel&&rasterReviewNeeded(lines)))return;
+  if(automatic&&($('#planReadLabels').checked||!dialog.open||!$('#planAutoPreview').checked||!lines.length||!cad&&!fromModel&&rasterReviewNeeded(lines)))return;
   try{const d=makePlanDesign(lines,source.width,source.height,{name:$('#planName').value,width:+$('#planWidth').value,depth:sourceAspect===null?undefined:+$('#planWidth').value*sourceAspect,wall:sourceWall,height:+$('#planHeight').value,thickness:+$('#planThickness').value,roof:$('#planRoof').value,annotations:semantic.annotations()});
    onBuild(d,{automatic});lastBuiltDesign=JSON.stringify(d);status('3Dを生成しました。ページ・壁線・実寸を確認し、必要に応じて修正して更新してください。');$('#openPlanImport').textContent='図面を選ぶ・読取結果を修正';setBusy(false);dialog.close();
   }catch(e){status('3D化できませんでした。壁線と寸法を修正してください。'+e.message);}
@@ -209,7 +210,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  $('#cadApply').onclick=()=>{if(!busy&&cad)applyCAD();};
  for(const id of ['cadLayers','cadUnit','cadScale'])$('#'+id).onchange=()=>{cadDirty=true;$('#planBuild').disabled=true;status('設定を変更しました。「CAD設定を反映」で線と実寸を更新してください。');};
  $('#editCurrentPlan').onclick=editCurrentModel;$('#planKnownLength').addEventListener('input',applyCalibration);$('#planWidth').addEventListener('input',()=>{calibration=null;draw();});
- $('#planBuild').onclick=()=>buildPreview(false);
+ $('#planReadLabels').onchange=controls;$('#planBuild').onclick=()=>buildPreview(false);
  $('#openPlanImport').onclick=()=>{const current=getDesign();if(current?.version===2&&lastBuiltDesign&&JSON.stringify(current)!==lastBuiltDesign){editCurrentModel();return;}safeTool();draw();onOpen();dialog.showModal();};$('#closePlanImport').onclick=()=>dialog.close();dialog.addEventListener('close',()=>{semantic.cancel();cancelRead();pending=null;pointer=null;exclusionPreview=null;onClose();});
  source.width=source.height=1;sx.fillStyle='white';sx.fillRect(0,0,1,1);safeTool();draw();setZoom(1);
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {textCandidates,suggestSpaces,inspectRegion,validateAnnotations,approvedAnnotations,restoreAnnotations,stairCandidates} from '../plan-semantic.mjs';
-import {ocrTokens,pdfPlanTokens,recognizePlan} from '../plan-ocr.mjs';
+import {ocrTokens,pdfPlanTokens,recognizePlan,textOnlyImage} from '../plan-ocr.mjs';
 import {validateDesign} from '../house-core.mjs';
 import {encodePlanFragment,decodePlanFragment} from '../share-codec.mjs';
 const token=(text,x=40,line=1)=>({text,line,confidence:91,bbox:{x0:x,x1:x+text.length*10,y0:50,y1:70}});
@@ -25,3 +25,9 @@ let terminated=0;globalThis.document={createElement:()=>({getContext:()=>({drawI
 await assert.rejects(recognizePlan({width:100,height:100},{load:async()=>{throw Error('offline');}}));
 assert.deepEqual(await recognizePlan({width:100,height:100},{load:async()=>({createWorker:async()=>worker})}),[]);assert.equal(terminated,1);
 console.log('PASS: room labels, stairs suggestions, bounded review, annotation validation/sharing, PDF coordinates and OCR retry');
+
+const ruleImage={width:200,height:160,data:new Uint8ClampedArray(200*160*4).fill(255)};
+for(let x=10;x<190;x++)for(let y=20;y<24;y++)ruleImage.data.fill(0,(y*200+x)*4,(y*200+x)*4+3);
+for(let x=50;x<60;x++)for(let y=70;y<80;y++)ruleImage.data.fill(0,(y*200+x)*4,(y*200+x)*4+3);
+const clean=textOnlyImage(ruleImage);assert.equal(clean.data[(21*200+30)*4],255);assert.equal(clean.data[(75*200+55)*4],0);assert.equal(ruleImage.data[(21*200+30)*4],0);
+console.log('PASS: OCR-only long-rule removal preserves original image and short text strokes');
