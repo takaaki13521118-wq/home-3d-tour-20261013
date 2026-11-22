@@ -50,3 +50,13 @@ assert.equal(insertPlanDoor([], {x:80,y:50},{x:120,y:50}).length,1);
 assert.throws(()=>insertPlanDoor([{...closed[0],kind:'window'}],{x:80,y:50},{x:120,y:50},6));
 assert.equal(closed[0].x2,200);
 console.log('PASS: door span opens parallel wall outlines and existing gaps without mutating originals');
+
+// An off-centre enclosed room surrounded by a large blank sheet must win
+// over the exterior margin; separate closed rooms remain separately enterable.
+const {planSpaces}=await import('../plan-space.mjs');
+const perimeter=(x,z,w,h)=>[[x,z,x+w,z],[x+w,z,x+w,z+h],[x+w,z+h,x,z+h],[x,z+h,x,z]].map(([x1,z1,x2,z2])=>({x1,z1,x2,z2,kind:'wall'}));
+const marginPlan={version:2,width:20,depth:20,height:2.6,thickness:.12,wall:'#eeeeee',roof:'none',walls:[...perimeter(-8,-7,4,3),...perimeter(2,2,3,3)]};
+const marginSpaces=planSpaces(marginPlan);assert.equal(marginSpaces.rooms.length,2);const roomStart=planSpawn(marginPlan);assert(roomStart.x>-8&&roomStart.x<-4&&roomStart.z>-7&&roomStart.z<-4);
+for(const room of marginSpaces.rooms)assert(planAllowed(marginPlan,room.point.x,room.point.z));
+const openPlan={...marginPlan,walls:marginPlan.walls.slice(0,3)};assert.equal(planSpaces(openPlan).rooms.length,0);assert(planSpawn(openPlan));
+console.log('PASS: interior-first spawn with oversized image margins, room choices, open-plan fallback and clear entry points');
