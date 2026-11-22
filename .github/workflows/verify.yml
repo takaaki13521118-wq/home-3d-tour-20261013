@@ -49,7 +49,7 @@ jobs:
         run: node tests/cad-smoke.mjs
 
       - name: Install pinned Japanese OCR runtime
-        run: npm install --prefix "$RUNNER_TEMP/ocr-test" --ignore-scripts --no-audit --no-fund tesseract.js@6.0.1
+        run: npm install --prefix "$RUNNER_TEMP/ocr-test" --ignore-scripts --no-audit --no-fund tesseract.js@6.0.1 pngjs@7.0.0
       - name: Read Japanese room labels from a real image
         env:
           OCR_TEST_ROOT: ${{ runner.temp }}/ocr-test

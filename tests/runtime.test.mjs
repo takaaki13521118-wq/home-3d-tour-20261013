@@ -48,6 +48,7 @@ if(allowed(9,9))throw Error('Walking can escape into image margin');
 $('#originalHouse').onclick();if(!originalLights.visible||!$('#chooseSpace').hidden)throw Error('Room controls leaked to original house');
 console.log('PASS: off-center room entry, room picker, indoor lighting and floor boundaries');`;
 
+code+=`\nbuildDesign({...imported,annotations:[{name:'和室',kind:'tatami',x:.25,y:.5,left:.1,right:.5,top:.125,bottom:.875}]});if(!Object.values(custom.views).some(v=>v.name==='和室')||custom.names.children.length!==2)throw Error('Approved room name/color missing from 3D');if(custom.d.annotations[0].name!=='和室')throw Error('Room annotations lost in model');console.log('PASS: approved semantic name and color in 3D and navigation');`;
 await import('data:text/javascript;base64,'+Buffer.from(pre+code).toString('base64'));
 
-const html=fs.readFileSync(root+'index.html','utf8');for(const id of ['passWalls','walkPlan','planDoorSpan','chooseSpace','spaceDialog','spaceChoices','closeSpaces'])assert.equal(html.split('id="'+id+'"').length-1,1,'Missing or duplicate control: '+id);
+const html=fs.readFileSync(root+'index.html','utf8');for(const id of ['passWalls','walkPlan','planDoorSpan','chooseSpace','spaceDialog','spaceChoices','closeSpaces','planReadLabels','semanticAnalyze','semanticAdd','semanticCancel','semanticName','semanticKind','semanticRect','semanticAccept','semanticReject','semanticInner','semanticSummary','semanticList','semanticDetails','semanticEvidence','semanticMessage'])assert.equal(html.split('id="'+id+'"').length-1,1,'Missing or duplicate control: '+id);
