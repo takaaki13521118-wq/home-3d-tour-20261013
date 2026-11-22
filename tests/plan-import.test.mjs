@@ -186,3 +186,5 @@ console.log('PASS: closing an unconfirmed exclusion leaves no stale preview or b
 
 $('#planExclude').onclick();const beforeFirstPointStatus=$('#planStatus').textContent;click(30,30);assert.equal($('#planStatus').textContent,beforeFirstPointStatus);assert.match($('#planCount').textContent,/1点目/);
 console.log('PASS: first-point selection does not resize the instructions above the canvas');
+
+$('#planDoorSpan').onclick();click(70,21);click(100,21);assert.match($('#planStatus').textContent,/ドア・通り道を追加/);$('#planBuild').onclick();assert(result.walls.some(w=>w.kind==='door'));const beforeDoorUndo=result.walls.length;$('#planUndo').onclick();$('#planBuild').onclick();assert(result.walls.length<beforeDoorUndo);console.log('PASS: door-span UI, build and undo');

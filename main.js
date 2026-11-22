@@ -1,7 +1,7 @@
 import {shareURL,designFromHash} from './share-codec.mjs';
 import {setupDesignLibrary} from './design-library-ui.mjs';
-import {setupPlanImport} from './plan-import.mjs?v=20261121-region-review-3';
-import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261121-region-review-3';
+import {setupPlanImport} from './plan-import.mjs?v=20261122-doors';
+import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261122-doors';
 import {findWalkRoute} from './route-core.mjs?v=20261114-route-clear';
 import * as T from 'three';
 import {bindJoystick,walkingVector} from './joystick.mjs?v=20261109-longer-walk';
@@ -108,13 +108,21 @@ function buildPlanDesign(d,record=true){
  const spawn=planSpawn(d);if(!spawn)throw Error('室内に立てる床がありません。壁の数・厚さ・寸法を見直してください。');
  disposeCustom();const root=new T.Group(),low=new T.Group(),high=new T.Group(),top=new T.Group(),lid=new T.Group(),names=new T.Group();root.add(low,high,top,lid,names);scene.add(root);
  const wallMaterial=mat(d.wall),owned=new Set([wallMaterial]);
- custom={d,root,low,high,top,lid,names,owned,wallMaterial,solids:planSolids(d),rooms:[],views:{planWalk:{p:[spawn.x,F+1.58,spawn.z],yaw:0,name:'図面の室内'}}};passWalls=!d.walls.some(w=>w.kind==='door');
+ custom={d,root,low,high,top,lid,names,owned,wallMaterial,solids:planSolids(d),rooms:[],views:{planWalk:{p:[spawn.x,F+1.58,spawn.z],yaw:0,name:'図面の室内'}}};passWalls=false;
  const b=(w,h,dep,x,y,z,m,g=low)=>box(w,h,dep,x,y,z,m,g);
  b(d.width,.4,d.depth,0,.2,0,concrete);b(d.width,.16,d.depth,0,F-.08,0,floorMat);b(130,.1,130,0,-.12,0,concrete);
  for(const w of d.walls){const length=Math.hypot(w.x2-w.x1,w.z2-w.z1),x=(w.x1+w.x2)/2,z=(w.z1+w.z2)/2,angle=-Math.atan2(w.z2-w.z1,w.x2-w.x1);
   const wb=(h,depth,y,m,g)=>{const mesh=b(length,h,depth,x,y,z,m,g);mesh.rotation.y=angle;};
   const piece=(lo,hi)=>{for(const [a,e,g] of [[lo,Math.min(hi,1.15),low],[Math.max(lo,1.15),hi,high]])if(e>a)wb(e-a,d.thickness,F+(a+e)/2,wallMaterial,g);};
-  if(w.kind==='door')piece(Math.min(2.05,d.height),d.height);
+  if(w.kind==='door'){
+   const doorHeight=Math.min(2.05,d.height-.05);piece(doorHeight,d.height);
+   const frame=new T.Group();frame.rotation.y=angle;frame.position.set(x,F,z);low.add(frame);
+   for(const side of [-1,1])b(.045,doorHeight,.08,side*(length/2-.0225),doorHeight/2,0,wood,frame);
+   b(length,.045,.08,0,doorHeight-.0225,0,wood,frame);
+   // A schematic leaf opened 90 degrees leaves the passage clear.
+   const leaf=b(.035,doorHeight-.07,Math.max(.1,length-.09),-length/2+.055,(doorHeight-.07)/2,(length-.09)/2,wood,frame);
+   leaf.userData.planDoor=true;
+  }
   else if(w.kind==='window'){const upperHeight=Math.min(2,d.height-.1);piece(0,.85);piece(upperHeight,d.height);wb(upperHeight-.85,.04,F+(upperHeight+.85)/2,glass,high);}
   else piece(0,d.height);
  }
@@ -159,7 +167,8 @@ let toastTimer;function showToast(message){const t=$('#toast');t.textContent=mes
 function indoorLook(){camera.rotation.order='YXZ';camera.rotation.set(pitch,yaw,0);}
 let lastFitFactor=1;
 function fitOverview(reset=false){if(mode==='inside'){lastFitFactor=1;return;}const factor=Math.max(1,.78/camera.aspect),ratio=reset?factor:factor/lastFitFactor;camera.position.sub(orbit.target).multiplyScalar(ratio).add(orbit.target);lastFitFactor=factor;const span=custom?Math.max(custom.d.width,custom.d.depth):10;orbit.maxDistance=Math.max(38,span*3)*factor;orbit.update();}
-function syncPassWalls(){const button=$('#passWalls'),ghost=mode==='inside'&&custom?.d.version===2&&passWalls;button.hidden=mode!=='inside'||custom?.d.version!==2;button.setAttribute('aria-pressed',String(passWalls));button.textContent=passWalls?'壁を通り抜け中':'壁を通り抜ける';if(mode==='inside'&&custom?.d.version===2)$('#helpText').textContent=passWalls?'十字キーで歩く／右スティックで回転。壁を通り抜けて移動中です。':'十字キーで歩く／右スティックで回転。壁に当たると止まります。';if(custom?.wallMaterial){custom.wallMaterial.transparent=!!ghost;custom.wallMaterial.opacity=ghost ? .38 : 1;custom.wallMaterial.depthWrite=!ghost;custom.wallMaterial.needsUpdate=true;}}
+function syncPassWalls(){const button=$('#passWalls');button.hidden=mode!=='inside'||custom?.d.version!==2;$('#walkPlan').hidden=button.hidden;button.setAttribute('aria-pressed',String(passWalls));button.textContent=passWalls?'壁通り抜け：ON':'壁通り抜け：OFF';if(mode==='inside'&&custom?.d.version===2)$('#helpText').textContent=passWalls?'壁を通り抜けて移動できます。通常の歩行に戻すにはOFFにしてください。':'十字キーで歩く／右スティックで回転。別の部屋へは「間取りから移動」も使えます。';if(custom?.wallMaterial){custom.wallMaterial.transparent=false;custom.wallMaterial.opacity=1;custom.wallMaterial.depthWrite=true;custom.wallMaterial.needsUpdate=true;}}
+$('#walkPlan').onclick=()=>{setMode('cut');if(routeEnabled){resetRoute();routeGroup.visible=false;}showToast('移動したい部屋の、壁から離れた床をタップしてください。');};
 function setMode(m){const span=custom?Math.max(custom.d.width,custom.d.depth):10;orbit.maxDistance=Math.max(38,span*3);camera.far=Math.max(160,span*9);scene.fog.near=Math.max(35,span*3);scene.fog.far=Math.max(100,span*7);renderer.shadowMap.needsUpdate=true;mode=m;locatedRoom=null;resetInput();cutStart=null;renderer.domElement.style.cursor=m==='cut'?'pointer':m==='inside'?'crosshair':'grab';orbit.enabled=m!=='inside';roof.visible=m==='outside';ceiling.visible=m==='inside';upper.visible=m!=='cut';labels.visible=m==='cut';routeGroup.visible=m==='cut'&&routeEnabled;$('#routeToggle').style.display='block';$('#routeToggle').textContent=m==='cut'?(routeEnabled?'動線を隠す':'動線を表示'):'動線を見る';$('#routeToggle').setAttribute('aria-label',m==='cut'?'間取りの動線を表示または非表示':'間取り画面に切り替えて動線を見る');$('#movePad').style.display=m==='inside'?'grid':'none';$('#lookControls').style.display=m==='inside'?'block':'none';document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));document.querySelectorAll('[data-room]').forEach(b=>b.classList.remove('active'));$('#status').textContent={outside:'EXTERIOR · 外観',cut:'FLOOR PLAN · 間取り',inside:'WALK THROUGH · 室内'}[m];$('#helpTitle').textContent=m==='inside'?'室内を見渡す・歩く':m==='cut'?'屋根を外して、間取りを見る':'家をぐるっと見渡す';$('#helpText').innerHTML=m==='inside'?(mobile()?'左の十字キーで歩く ／ 右スティックか画面ドラッグで回転':'ドラッグ：見回す ／ <span class="key">W A S D</span> または矢印：歩く<br>十字キーと右スティックで、歩きながら見回せます。'):m==='cut'?(mobile()?'動線を表示 → 床を2点タップ ／ ドラッグで回転':'動線を表示 → 床を2点クリック ／ ドラッグで回転'):(mobile()?'1本指で回転 ／ 2本指で拡大・縮小':'左ドラッグ：回転 ／ ホイール：拡大・縮小 ／ 右ドラッグ：平行移動');camera.fov=m==='inside'?70:48;camera.updateProjectionMatrix();syncPanelForMode();syncPassWalls();customVisibility(m);if(m==='cut'){camera.position.set(-10,17,14);orbit.target.set(0,0,0);orbit.update();$('#location').textContent='屋根・壁の上部を非表示';}if(m==='outside'){camera.position.set(-16,10,18);orbit.target.set(0,1.6,.3);orbit.update();$('#location').textContent='南西からの外観';}if(custom&&m!=='inside'){const distance=Math.max(custom.d.width,custom.d.depth)*1.5;camera.position.set(-distance,m==='cut'?distance:distance*.65,distance);orbit.target.set(0,1,0);orbit.update();}fitOverview(true);}
 function enter(id){const r=(custom?custom.views:roomViews)[id];if(!r)return;setMode('inside');camera.position.fromArray(r.p);yaw=r.yaw;pitch=REST_PITCH;indoorLook();$('#location').textContent=r.name;document.querySelector(`[data-room="${id}"]`).classList.add('active');closeMobilePanel();}
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>b.dataset.mode==='inside'?enter(interiorStartRoom(custom)):setMode(b.dataset.mode));document.querySelectorAll('[data-room]').forEach(b=>b.onclick=()=>enter(b.dataset.room));document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{setMode('outside');const p={sw:[-16,10,18],se:[17,10,18],ne:[17,10,-18],nw:[-17,10,-18]}[b.dataset.view];camera.position.fromArray(p);if(custom)camera.position.multiplyScalar(Math.max(custom.d.width,custom.d.depth)/10);fitOverview(true);$('#location').textContent=b.textContent;closeMobilePanel();});$('#reset').onclick=()=>setMode('outside');$('#togglePanel').onclick=()=>setPanelOpen($('#panel').classList.contains('collapsed'));$('#shot').onclick=()=>{renderer.render(scene,camera);const a=document.createElement('a');a.download='house-3d.png';a.href=renderer.domElement.toDataURL('image/png');a.click();};
@@ -186,7 +195,7 @@ updateDesignUI();
 joystickControllers.push(
  bindJoystick($('#lookJoystick'),$('#lookKnob'),(x,y)=>lookJoy.set(x,y),()=>mode==='inside',{reach:.29,centered:true,horizontalOnly:()=>!verticalLookEnabled()})
 );
-$('#levelView').onclick=resetView;$('#passWalls').onclick=()=>{if(mode!=='inside'||custom?.d.version!==2)return;passWalls=!passWalls;resetInput();syncPassWalls();showToast(passWalls?'壁を通り抜けて移動できます。出入口の位置は図面編集で指定できます。':'壁の衝突判定を有効にしました。');};
+$('#levelView').onclick=resetView;$('#passWalls').onclick=()=>{if(mode!=='inside'||custom?.d.version!==2)return;passWalls=!passWalls;if(!passWalls&&!planAllowed(custom.d,camera.position.x,camera.position.z,custom.solids)){const p=planSpawn(custom.d);if(p){camera.position.x=p.x;camera.position.z=p.z;}}resetInput();syncPassWalls();showToast(passWalls?'壁を通り抜けて移動できます。出入口の位置は図面編集で指定できます。':'壁の衝突判定を有効にしました。');};
 $('#verticalLook').onchange=()=>{resetInput();if(!verticalLookEnabled())pitch=REST_PITCH;if(mode==='inside')indoorLook();};
 $('#turnAround').onclick=()=>{if(mode!=='inside')return;resetInput();yaw+=Math.PI;pitch=REST_PITCH;indoorLook();};
 document.addEventListener('visibilitychange',()=>{if(document.hidden)resetInput();});

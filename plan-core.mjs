@@ -67,3 +67,23 @@ export function planEditorSnapshot(input){
 export function planSegmentMetres(a,b,pixelWidth,pixelHeight,width,depth=width*pixelHeight/pixelWidth){
  return Math.hypot((b.x-a.x)*width/pixelWidth,(b.y-a.y)*depth/pixelHeight);
 }
+
+// A user-confirmed span opens both outlines of a wall, or bridges an existing gap.
+export function insertPlanDoor(lines,a,b,tolerance=6,minFragment=1){
+ const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);
+ if(!Number.isFinite(len)||len<6)throw Error('ドアの両端を離して選んでください。');
+ const ux=dx/len,uy=dy/len,kept=[];
+ for(const l of lines){
+  const cross1=Math.abs((l.x1-a.x)*uy-(l.y1-a.y)*ux),cross2=Math.abs((l.x2-a.x)*uy-(l.y2-a.y)*ux);
+  const ll=Math.hypot(l.x2-l.x1,l.y2-l.y1);
+  if(!ll||cross1>tolerance||cross2>tolerance||Math.abs((l.x2-l.x1)*uy-(l.y2-l.y1)*ux)>ll*.02){kept.push({...l});continue;}
+  const t1=(l.x1-a.x)*ux+(l.y1-a.y)*uy,t2=(l.x2-a.x)*ux+(l.y2-a.y)*uy;
+  if(Math.max(t1,t2)<=0||Math.min(t1,t2)>=len){kept.push({...l});continue;}
+  if(l.kind==='window')throw Error('窓と重なっています。窓を壁に戻してからドアを指定してください。');
+  const lo=Math.max(0,Math.min((0-t1)/(t2-t1),(len-t1)/(t2-t1))),hi=Math.min(1,Math.max((0-t1)/(t2-t1),(len-t1)/(t2-t1)));
+  for(const [start,end] of [[0,lo],[hi,1]])if((end-start)*ll>=minFragment)kept.push({...l,x1:l.x1+(l.x2-l.x1)*start,y1:l.y1+(l.y2-l.y1)*start,x2:l.x1+(l.x2-l.x1)*end,y2:l.y1+(l.y2-l.y1)*end});
+ }
+ kept.push({x1:a.x,y1:a.y,x2:b.x,y2:b.y,kind:'door'});
+ if(kept.length>400)throw Error('線が多すぎます。不要な線を除いてください。');
+ return kept;
+}

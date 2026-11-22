@@ -1,8 +1,8 @@
 import {cadVectors,cadPreview,clipCADLines} from './cad-core.mjs';
 import {readCAD} from './cad-runtime.mjs';
 import {chooseFloorPlanPage} from './plan-pages.mjs';
-import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261121-region-review-3';
-import {detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261121-region-review-3';
+import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261122-doors';
+import {insertPlanDoor,detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261122-doors';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 let pdfModuleRetry=0;
 export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadCAD=readCAD,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs'+(pdfModuleRetry?'?retry='+pdfModuleRetry:''))}){
@@ -15,7 +15,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   const ready=source.width>=8;
   const known=+$('#planKnownLength').value;
   $('#planBuild').disabled=busy||!!exclusionPreview||cadDirty||!lines.length||!!calibration&&(!Number.isFinite(known)||known<.1||known>60||known/calibration.unitLength<1||known/calibration.unitLength>60);
-  for(const id of ['planExclude','planShowOriginal','planQuickCrop','planStrongLines'])$('#'+id).disabled=busy||!ready;
+  for(const id of ['planDoorSpan','planExclude','planShowOriginal','planQuickCrop','planStrongLines'])$('#'+id).disabled=busy||!ready;
   $('#planShowOriginal').disabled=busy||!ready||fromModel;
   $('#planApplyExclusion').disabled=busy||!exclusionPreview?.removed.length;
   $('#planDetect').disabled=busy||!ready||fromModel;
@@ -156,9 +156,16 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  function applyPoint(p){
   const tool=$('#planTool').value;if(tool==='pan'||$('#planShowOriginal').checked)return;
   if(exclusionPreview){status('除外する線を確認し「この範囲を除外」か「キャンセル」を押してください。');return;}
-  if(tool==='exclude'||tool==='crop'||tool==='wall'||tool==='scale'){
+  if(tool==='doorSpan'||tool==='exclude'||tool==='crop'||tool==='wall'||tool==='scale'){
    if(!pending){pending=p;draw();return;}
    const a=pending;pending=null;
+   if(tool==='doorSpan'){
+    const horizontal=Math.abs(p.x-a.x)>=Math.abs(p.y-a.y),end=(cad||fromModel)?p:{x:horizontal?p.x:a.x,y:horizontal?a.y:p.y};
+    const width=+$('#planWidth').value,metres=planSegmentMetres(a,end,source.width,source.height,width,width*(sourceAspect??source.height/source.width));
+    if(!Number.isFinite(metres)||metres<.3||metres>6)throw Error('ドア・通り道の幅は0.3〜6mにしてください。先に実寸を合わせてください。');
+    const next=insertPlanDoor(lines,a,end,Math.max(3,(+$('#planThickness').value||.12)*source.width/width*1.5),.031*source.width/width);
+    history();lines=next;draw();status(`幅 ${metres.toFixed(2)} m のドア・通り道を追加しました。3Dでは開いたドアとして表示します。開く向きは仮の表示です。「戻す」で取り消せます。`);return;
+   }
    if(tool==='exclude'){const rect=reviewRect(a,p);exclusionPreview={rect,...exclude(lines,[rect])};$('#planShowOriginal').checked=false;draw();status(exclusionPreview.removed.length?'灰色の線が除外対象です。実際の壁は囲まないでください。確認後に反映できます。':'この範囲に除外する壁線はありません。窓と出入口は保持します。');$('#planExclusionReview').scrollIntoView?.({block:'nearest',behavior:'instant'});return;}
    if(tool==='crop'){
     const x=Math.floor(Math.min(a.x,p.x)),y=Math.floor(Math.min(a.y,p.y)),w=Math.floor(Math.abs(a.x-p.x)),h=Math.floor(Math.abs(a.y-p.y));if(w<30||h<30)throw Error('切り抜く範囲を広げてください。');
@@ -182,6 +189,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  $('#planDetect').onclick=()=>{if(busy)return;try{detect();}catch(e){status(e.message);}};
  $('#planQuickCrop').onclick=()=>{$('#planTool').value='crop';$('#planTool').onchange();status('建物だけを囲むように、図面の左上と右下を順にタップしてください。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});};
  $('#planStrongLines').onclick=()=>{if(busy||source.width<8)return;try{const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:4});if(!candidate.length){status('太い線が見つかりません。元の赤い線を保持しました。');return;}history();lines=exclude(candidate,exclusions).lines;pending=null;exclusionPreview=null;draw();status(`線幅で ${lines.length} 本に絞りました。壁を認識した結果ではありません。家具が残ったり、必要な壁が消えたりするため、原図と照合してください。「戻す」で元に戻せます。`);}catch(e){status(e.message);}};
+ $('#planDoorSpan').onclick=()=>{if(busy||source.width<8)return;$('#planTool').value='doorSpan';$('#planTool').onchange();status('原図の出入口の両端を2点で選んでください。既存の壁にも、線が途切れている隙間にも追加できます。実寸を先に合わせてください。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});};
  $('#planExclude').onclick=()=>{if(busy||source.width<8)return;$('#planTool').value='exclude';$('#planTool').onchange();status('家具・畳・寸法線を囲む対角2点をタップしてください。壁と接する部分は小さく区切って選びます。すぐには削除されません。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});};
  $('#planApplyExclusion').onclick=()=>{if(busy||!exclusionPreview?.removed.length)return;history();lines=exclusionPreview.lines;exclusions.push(exclusionPreview.rect);exclusionPreview=null;draw();status('選んだ範囲の線を除外しました。原図の画像・範囲外の線・窓・出入口は保持しています。続けて別の範囲を選ぶか「戻す」で取り消せます。');};
  $('#planCancelExclusion').onclick=()=>{exclusionPreview=null;pending=null;draw();status('除外を取り消しました。線は変更していません。');};

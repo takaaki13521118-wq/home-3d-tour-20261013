@@ -39,3 +39,14 @@ const empty=new Uint8ClampedArray(width*height*4).fill(255);assert.equal(detectW
 console.log('PASS: raster wall detection, noise rejection, dimensions, plan validation, safe spawn, openings, save/share and deep history');
 
 const paired=[{x1:0,y1:20,x2:200,y2:20,kind:'wall'},{x1:0,y1:25,x2:200,y2:25,kind:'wall'},{x1:0,y1:50,x2:200,y2:50,kind:'wall'}];const opened=openParallelWalls(paired,{index:0,t:.5},30,'door',8);assert.equal(opened.filter(l=>l.kind==='door').length,2);assert.equal(opened.at(-1).y1,50);console.log('PASS: paired wall outlines receive matching openings');
+
+const {insertPlanDoor}=await import('../plan-core.mjs');
+const closed=[{x1:0,y1:50,x2:200,y2:50,kind:'wall'},{x1:200,y1:55,x2:0,y2:55,kind:'wall'}];
+const doorSpanOpened=insertPlanDoor(closed,{x:80,y:50},{x:120,y:50},6);
+assert.equal(doorSpanOpened.filter(l=>l.kind==='door').length,1);
+assert.equal(doorSpanOpened.length,5);
+assert(doorSpanOpened.filter(l=>l.kind==='wall').every(l=>Math.max(l.x1,l.x2)<=80||Math.min(l.x1,l.x2)>=120));
+assert.equal(insertPlanDoor([], {x:80,y:50},{x:120,y:50}).length,1);
+assert.throws(()=>insertPlanDoor([{...closed[0],kind:'window'}],{x:80,y:50},{x:120,y:50},6));
+assert.equal(closed[0].x2,200);
+console.log('PASS: door span opens parallel wall outlines and existing gaps without mutating originals');
