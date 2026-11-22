@@ -18,7 +18,7 @@ export function textCandidates(tokens){
 }
 export function proposeRegion(label,lines,width,height){
  const {x,y}=label,eps=Math.max(3,Math.min(width,height)*.004),hits={left:[],right:[],top:[],bottom:[]};
- for(const l of lines){const dx=l.x2-l.x1,dy=l.y2-l.y1;
+ for(const l of lines){const b=label.bbox;if(b&&[l.x1,l.x2].every(x=>x>=b.x0-4&&x<=b.x1+4)&&[l.y1,l.y2].every(y=>y>=b.y0-4&&y<=b.y1+4))continue;const dx=l.x2-l.x1,dy=l.y2-l.y1;
   if(Math.abs(dy)>eps&&y>=Math.min(l.y1,l.y2)&&y<=Math.max(l.y1,l.y2)){const xx=l.x1+(y-l.y1)*dx/dy;if(xx<x-eps)hits.left.push(xx);if(xx>x+eps)hits.right.push(xx);}
   if(Math.abs(dx)>eps&&x>=Math.min(l.x1,l.x2)&&x<=Math.max(l.x1,l.x2)){const yy=l.y1+(x-l.x1)*dy/dx;if(yy<y-eps)hits.top.push(yy);if(yy>y+eps)hits.bottom.push(yy);}
  }

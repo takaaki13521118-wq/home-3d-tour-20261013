@@ -1,4 +1,4 @@
-import {validateAnnotations} from './plan-semantic.mjs';
+import {validateAnnotations} from './plan-semantic.mjs?v=20261123-semantic2';
 import {planSpaces} from './plan-space.mjs';
 // Local, deterministic line detection. This is not semantic room/door recognition.
 export function detectWalls(image,{threshold=155,minLength=28,merge=5,minStroke=2}={}){

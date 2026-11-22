@@ -1,4 +1,4 @@
-import {validateDesign} from './house-core.mjs?v=20261123-semantic';
+import {validateDesign} from './house-core.mjs?v=20261123-semantic2';
 export const LIBRARY_KEY='home3dSavedDesignsV1';
 export const LIBRARY_LIMIT=20;
 const clone=v=>JSON.parse(JSON.stringify(v));

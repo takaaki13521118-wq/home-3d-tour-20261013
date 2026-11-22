@@ -31,3 +31,7 @@ for(let x=10;x<190;x++)for(let y=20;y<24;y++)ruleImage.data.fill(0,(y*200+x)*4,(
 for(let x=50;x<60;x++)for(let y=70;y<80;y++)ruleImage.data.fill(0,(y*200+x)*4,(y*200+x)*4+3);
 const clean=textOnlyImage(ruleImage);assert.equal(clean.data[(21*200+30)*4],255);assert.equal(clean.data[(75*200+55)*4],0);assert.equal(ruleImage.data[(21*200+30)*4],0);
 console.log('PASS: OCR-only long-rule removal preserves original image and short text strokes');
+
+const textStroke={x1:48,x2:48,y1:50,y2:70,kind:'wall'};
+assert.equal(suggestSpaces([token('キッチン')],[...lines,textStroke],200,180)[0].rect.left,10);
+console.log('PASS: OCR glyph strokes do not shrink room boundary proposals');

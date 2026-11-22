@@ -1,5 +1,5 @@
-import {semanticKinds,suggestSpaces,inspectRegion,approvedAnnotations,restoreAnnotations} from './plan-semantic.mjs';
-import {recognizePlan} from './plan-ocr.mjs';
+import {semanticKinds,suggestSpaces,inspectRegion,approvedAnnotations,restoreAnnotations} from './plan-semantic.mjs?v=20261123-semantic2';
+import {recognizePlan} from './plan-ocr.mjs?v=20261123-semantic2';
 export function setupSemanticReview({getSource,getLines,changed,setTool,previewExclusion,readOCR=recognizePlan}){
  const $=s=>document.querySelector(s);let candidates=[],selected=null,busy=false,abort=null,job=0,pdfTokens=[];
  const selectedCandidate=()=>candidates.find(c=>c.id===selected);

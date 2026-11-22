@@ -1,5 +1,5 @@
-import {semanticKinds} from './plan-semantic.mjs';
-import {validateDesign} from './house-core.mjs?v=20261123-semantic';
+import {semanticKinds} from './plan-semantic.mjs?v=20261123-semantic2';
+import {validateDesign} from './house-core.mjs?v=20261123-semantic2';
 // Compact, versioned floor-plan fragment. Coordinates are stored at 0.1 mm.
 const SCALE=10000;
 const kinds=['wall','door','window'];

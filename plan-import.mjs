@@ -1,10 +1,10 @@
-import {setupSemanticReview} from './plan-semantic-ui.mjs?v=20261123-semantic';
-import {pdfPlanTokens} from './plan-ocr.mjs';
+import {setupSemanticReview} from './plan-semantic-ui.mjs?v=20261123-semantic2';
+import {pdfPlanTokens} from './plan-ocr.mjs?v=20261123-semantic2';
 import {cadVectors,cadPreview,clipCADLines} from './cad-core.mjs';
 import {readCAD} from './cad-runtime.mjs';
 import {chooseFloorPlanPage} from './plan-pages.mjs';
-import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261123-semantic';
-import {insertPlanDoor,detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261123-semantic';
+import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261123-semantic2';
+import {insertPlanDoor,detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261123-semantic2';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 let pdfModuleRetry=0;
 export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadCAD=readCAD,readOCR,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs'+(pdfModuleRetry?'?retry='+pdfModuleRetry:''))}){
