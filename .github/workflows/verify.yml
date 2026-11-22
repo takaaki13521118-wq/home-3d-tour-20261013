@@ -28,6 +28,7 @@ jobs:
           node tests/plan-pages.test.mjs
           node tests/plan-import.test.mjs
           node tests/runtime.test.mjs
+          node tests/semantic.test.mjs
       - name: Install pinned PDF renderer for verification
         run: npm install --prefix "$RUNNER_TEMP/pdf-test" --ignore-scripts --no-audit --no-fund pdfjs-dist@4.10.38 @napi-rs/canvas@0.1.68
       - name: Render a real PDF and detect its walls
@@ -46,3 +47,10 @@ jobs:
         env:
           CAD_TEST_ROOT: ${{ runner.temp }}/cad-test
         run: node tests/cad-smoke.mjs
+
+      - name: Install pinned Japanese OCR runtime
+        run: npm install --prefix "$RUNNER_TEMP/ocr-test" --ignore-scripts --no-audit --no-fund tesseract.js@6.0.1
+      - name: Read Japanese room labels from a real image
+        env:
+          OCR_TEST_ROOT: ${{ runner.temp }}/ocr-test
+        run: node tests/ocr-smoke.mjs

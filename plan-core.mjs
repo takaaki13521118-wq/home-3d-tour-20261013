@@ -1,3 +1,4 @@
+import {validateAnnotations} from './plan-semantic.mjs';
 import {planSpaces} from './plan-space.mjs';
 // Local, deterministic line detection. This is not semantic room/door recognition.
 export function detectWalls(image,{threshold=155,minLength=28,merge=5,minStroke=2}={}){
@@ -36,12 +37,13 @@ export function validatePlanDesign(v){
   if(Math.hypot(x2-x1,z2-z1)<.03||!['wall','door','window'].includes(w.kind))throw Error('壁の線または開口部が不正です。');
   return {x1,z1,x2,z2,kind:w.kind};});
  if(!/^#[0-9a-f]{6}$/i.test(v.wall)||!['none','flat'].includes(v.roof))throw Error('外観の指定が不正です。');
- return {version:2,name:typeof v.name==='string'?v.name.slice(0,40):'図面から作成',width,depth,height,thickness:n(v.thickness,.06,.4),wall:v.wall,roof:v.roof,walls};
+ const annotations=validateAnnotations(v.annotations);
+ return {...(annotations.length?{annotations}:{}),version:2,name:typeof v.name==='string'?v.name.slice(0,40):'図面から作成',width,depth,height,thickness:n(v.thickness,.06,.4),wall:v.wall,roof:v.roof,walls};
 }
-export function makePlanDesign(lines,pixelWidth,pixelHeight,{width=10,depth:explicitDepth,height=2.6,thickness=.12,name='図面から作成',roof='none',wall='#e9e4d8'}={}){
+export function makePlanDesign(lines,pixelWidth,pixelHeight,{width=10,depth:explicitDepth,height=2.6,thickness=.12,name='図面から作成',roof='none',wall='#e9e4d8',annotations}={}){
  const s=width/pixelWidth,round=v=>Math.round(v*10000)/10000;
  const depth=explicitDepth??round(pixelHeight*s),bounded=(v,half)=>v < -half-1e-8 || v > half+1e-8 ? v : Math.max(-half,Math.min(half,round(v)));
- return validatePlanDesign({version:2,name,width,depth,height,thickness,wall,roof,walls:lines.map(l=>({x1:bounded((l.x1-pixelWidth/2)*s,width/2),x2:bounded((l.x2-pixelWidth/2)*s,width/2),z1:bounded((l.y1/pixelHeight-.5)*depth,depth/2),z2:bounded((l.y2/pixelHeight-.5)*depth,depth/2),kind:l.kind||'wall'}))});
+ return validatePlanDesign({version:2,name,width,depth,height,thickness,wall,roof,annotations,walls:lines.map(l=>({x1:bounded((l.x1-pixelWidth/2)*s,width/2),x2:bounded((l.x2-pixelWidth/2)*s,width/2),z1:bounded((l.y1/pixelHeight-.5)*depth,depth/2),z2:bounded((l.y2/pixelHeight-.5)*depth,depth/2),kind:l.kind||'wall'}))});
 }
 export function planSolids(d){return d.walls.filter(w=>w.kind!=='door').map(w=>({x:(w.x1+w.x2)/2,z:(w.z1+w.z2)/2,w:Math.hypot(w.x2-w.x1,w.z2-w.z1),d:d.thickness,angle:Math.atan2(w.z2-w.z1,w.x2-w.x1)}));}
 export function solidDistance(s,x,z){const c=Math.cos(s.angle||0),t=Math.sin(s.angle||0),dx=x-s.x,dz=z-s.z;return Math.hypot(Math.max(0,Math.abs(c*dx+t*dz)-s.w/2),Math.max(0,Math.abs(-t*dx+c*dz)-s.d/2));}

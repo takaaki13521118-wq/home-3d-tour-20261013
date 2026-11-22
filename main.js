@@ -1,12 +1,13 @@
-import {planSpaces,spaceAt} from './plan-space.mjs?v=20261122-spaces2';
-import {shareURL,designFromHash} from './share-codec.mjs';
-import {setupDesignLibrary} from './design-library-ui.mjs';
-import {setupPlanImport} from './plan-import.mjs?v=20261122-spaces2';
-import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261122-spaces2';
+import {semanticKinds} from './plan-semantic.mjs';
+import {planSpaces,spaceAt} from './plan-space.mjs?v=20261123-semantic';
+import {shareURL,designFromHash} from './share-codec.mjs?v=20261123-semantic';
+import {setupDesignLibrary} from './design-library-ui.mjs?v=20261123-semantic';
+import {setupPlanImport} from './plan-import.mjs?v=20261123-semantic';
+import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261123-semantic';
 import {findWalkRoute} from './route-core.mjs?v=20261114-route-clear';
 import * as T from 'three';
 import {bindJoystick,walkingVector} from './joystick.mjs?v=20261109-longer-walk';
-import {validateDesign,layoutRooms,slideMove,createDesignHistory,interiorStartRoom} from './house-core.mjs?v=20261107-cad';
+import {validateDesign,layoutRooms,slideMove,createDesignHistory,interiorStartRoom} from './house-core.mjs?v=20261123-semantic';
 import {OrbitControls} from './vendor/OrbitControls.js';
 const $=s=>document.querySelector(s);
 let renderer;
@@ -133,8 +134,10 @@ function buildPlanDesign(d,record=true){
  if(d.roof==='flat')b(fw+.3,.1,fd+.3,fx,F+d.height+.1,fz,roofmat,top);
  b(fw,.07,fd,fx,F+d.height,fz,white,lid);
  $('#spaceChoices').replaceChildren();$('.room').replaceChildren();
- const choices=space.rooms.length?space.rooms.map((r,i)=>({id:i?'planRoom'+i:'planWalk',r,name:'空間'+(i+1)})):[{id:'planWalk',r:{point:spawn},name:'室内位置を確認'}];
+ const roomName=(r,i)=>{const names=(d.annotations??[]).filter(a=>spaceAt(space,(a.x-.5)*d.width,(a.y-.5)*d.depth)===i).map(a=>a.name);return [...new Set(names)].join('・')||'空間'+(i+1);};
+ const choices=space.rooms.length?space.rooms.map((r,i)=>({id:i?'planRoom'+i:'planWalk',r,name:roomName(r,i)})):[{id:'planWalk',r:{point:spawn},name:'室内位置を確認'}];
  for(const {id,r,name} of choices){custom.views[id]={p:[r.point.x,F+1.58,r.point.z],yaw:r.yaw??0,name};const button=document.createElement('button');button.dataset.room=id;button.textContent=name+'へ入る';button.onclick=()=>enter(id);$('.room').append(button);const pick=document.createElement('button');pick.textContent=name+'へ入る';pick.onclick=()=>{$('#spaceDialog').close();enter(id);};$('#spaceChoices').append(pick);}
+ for(const a of d.annotations??[]){const x=(a.x-.5)*d.width,z=(a.y-.5)*d.depth;const c=document.createElement('canvas');c.width=512;c.height=100;const cx=c.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,512,100);cx.fillStyle=semanticKinds[a.kind].color;cx.font='36px sans-serif';cx.textAlign='center';cx.fillText(a.name,256,65);const tx=new T.CanvasTexture(c),material=new T.SpriteMaterial({map:tx,depthTest:false});owned.add(material);const sp=new T.Sprite(material);sp.position.set(x,F+1.25,z);sp.scale.set(1.7,.34,1);names.add(sp);const tint=new T.MeshBasicMaterial({color:semanticKinds[a.kind].color,transparent:true,opacity:.22,depthWrite:false});owned.add(tint);b((a.right-a.left)*d.width,.008,(a.bottom-a.top)*d.depth,((a.left+a.right)/2-.5)*d.width,F+.008,((a.top+a.bottom)/2-.5)*d.depth,tint,names);}
  custom.fillLight=new T.PointLight(0xfff8ee,1.5,Math.max(fw,fd)*2,2);custom.fillLight.position.set(spawn.x,F+d.height-.25,spawn.z);root.add(custom.fillLight);
  if(!space.rooms.length)showToast('壁で囲まれた部屋を確認できません。間取りの床を選ぶか、壁と出入口を修正してください。');
  document.querySelector('header h1').textContent=d.name||'図面から作成';document.querySelector('header p').textContent=`図面モデル ${d.width.toFixed(1)} × ${d.depth.toFixed(1)} m`;

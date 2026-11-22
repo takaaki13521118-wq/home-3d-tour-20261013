@@ -10,7 +10,8 @@ globalThis.document={querySelector:$,createElement:t=>t==='canvas'?new Canvas():
 for(const [id,value]of Object.entries({planWidth:'12',planHeight:'2.6',planThickness:'.12',planRoof:'none',planThreshold:'155',planMinLength:'24',planKnownLength:'5',planTool:'erase',planDoorWidth:'.9',planWindowWidth:'1.6'}))$('#'+id).value=value;
 let result,opened=0,closed=0,currentDesign=null;
 const pdfLib={GlobalWorkerOptions:{},getDocument(){return {destroy:async()=>{},promise:Promise.resolve({numPages:2,getPage:async()=>({getViewport:()=>({width:240,height:180}),render({canvasContext}){canvasContext.drawImage({data:pixels()});return {promise:Promise.resolve(),cancel(){}};}})})};}};
-setupPlanImport({getDesign:()=>currentDesign,onBuild:d=>result=validateDesign(d),onOpen:()=>opened++,onClose:()=>closed++,loadPDF:async()=>pdfLib,loadCAD:async file=>({format:file.name.split('.').pop(),doc:{header:{$INSUNITS:4},entities:[{type:"LWPOLYLINE",layer:"Walls",shape:true,vertices:[{x:0,y:0},{x:8000,y:0},{x:8000,y:6000},{x:0,y:6000}]},{type:"LINE",layer:"Dims",vertices:[{x:0,y:-1000},{x:8000,y:-1000}]}]}})});
+let semanticOCR=async()=>[];
+setupPlanImport({readOCR:(...a)=>semanticOCR(...a),getDesign:()=>currentDesign,onBuild:d=>result=validateDesign(d),onOpen:()=>opened++,onClose:()=>closed++,loadPDF:async()=>pdfLib,loadCAD:async file=>({format:file.name.split('.').pop(),doc:{header:{$INSUNITS:4},entities:[{type:"LWPOLYLINE",layer:"Walls",shape:true,vertices:[{x:0,y:0},{x:8000,y:0},{x:8000,y:6000},{x:0,y:6000}]},{type:"LINE",layer:"Dims",vertices:[{x:0,y:-1000},{x:8000,y:-1000}]}]}})});
 $('#openPlanImport').onclick();assert.equal(opened,1);assert.equal($('#planDialog').open,true);
 const file=new Blob(['fixture'],{type:'image/png'});file.name='平面図.png';
 await $('#planFile').onchange({target:{files:[file],value:'file'}});assert.equal($('#planBuild').disabled,false);assert.match($('#planCount').textContent,/4 本/);
@@ -188,3 +189,19 @@ $('#planExclude').onclick();const beforeFirstPointStatus=$('#planStatus').textCo
 console.log('PASS: first-point selection does not resize the instructions above the canvas');
 
 $('#planDoorSpan').onclick();click(70,21);click(100,21);assert.match($('#planStatus').textContent,/ドア・通り道を追加/);$('#planBuild').onclick();assert(result.walls.some(w=>w.kind==='door'));const beforeDoorUndo=result.walls.length;$('#planUndo').onclick();$('#planBuild').onclick();assert(result.walls.length<beforeDoorUndo);console.log('PASS: door-span UI, build and undo');
+
+// Read -> review -> confirmed annotations -> model, without erasing walls.
+$('#planAutoPreview').checked=false;$('#planReadLabels').checked=true;currentDesign=null;imagePixels=pixels();
+semanticOCR=async()=>[{text:'和室',line:1,confidence:92,bbox:{x0:90,y0:75,x1:125,y1:95}}];
+$('#openPlanImport').onclick();result=null;await $('#planFile').onchange({target:{files:[file],value:'file'}});
+assert.equal($('#semanticList').children.length,1);assert.equal($('#planBuild').disabled,true);
+$('#planBuild').onclick();assert.equal(result,null);assert.match($('#planStatus').textContent,/確認待ち/);
+$('#semanticName').value='和室A';$('#semanticName').oninput();$('#semanticAccept').onclick();
+assert.equal($('#planBuild').disabled,false);$('#planBuild').onclick();assert.equal(result.annotations[0].name,'和室A');assert.equal(result.annotations[0].kind,'tatami');assert.equal(result.walls.length,4);
+currentDesign=result;$('#editCurrentPlan').onclick();assert.equal($('#semanticList').children.length,1);assert.equal($('#semanticName').value,'和室A');assert.equal($('#planBuild').disabled,false);
+$('#planTool').value='wall';click(100,25);click(100,150);assert.equal($('#planBuild').disabled,true);$('#planUndo').onclick();assert.equal($('#planBuild').disabled,false);
+currentDesign=null;$('#planReadLabels').checked=false;await $('#planFile').onchange({target:{files:[file],value:'file'}});
+semanticOCR=async()=>{throw Error('offline');};await $('#semanticAnalyze').onclick();assert.match($('#semanticMessage').textContent,/再試行/);assert.equal($('#planBuild').disabled,false);
+let finishOCR;semanticOCR=()=>new Promise(r=>finishOCR=r);const pendingOCR=$('#semanticAnalyze').onclick();$('#semanticCancel').onclick();finishOCR([{text:'収納',line:1,confidence:90,bbox:{x0:90,y0:75,x1:125,y1:95}}]);await pendingOCR;assert.equal($('#semanticList').children.length,0);assert.equal($('#planBuild').disabled,false);
+semanticOCR=async()=>[{text:'収納',line:1,confidence:90,bbox:{x0:90,y0:75,x1:125,y1:95}}];await $('#semanticAnalyze').onclick();assert.equal($('#semanticList').children.length,1);$('#semanticReject').onclick();assert.equal($('#planBuild').disabled,false);$('#planBuild').onclick();assert.equal(result.annotations,undefined);
+console.log('PASS: semantic OCR review, name edits, approval gate, model re-edit, undo, cancellation and retry');

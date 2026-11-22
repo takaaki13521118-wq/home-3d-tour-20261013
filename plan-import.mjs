@@ -1,27 +1,30 @@
+import {setupSemanticReview} from './plan-semantic-ui.mjs?v=20261123-semantic';
+import {pdfPlanTokens} from './plan-ocr.mjs';
 import {cadVectors,cadPreview,clipCADLines} from './cad-core.mjs';
 import {readCAD} from './cad-runtime.mjs';
 import {chooseFloorPlanPage} from './plan-pages.mjs';
-import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261122-spaces2';
-import {insertPlanDoor,detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261122-spaces2';
+import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261123-semantic';
+import {insertPlanDoor,detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261123-semantic';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 let pdfModuleRetry=0;
-export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadCAD=readCAD,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs'+(pdfModuleRetry?'?retry='+pdfModuleRetry:''))}){
+export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadCAD=readCAD,readOCR,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs'+(pdfModuleRetry?'?retry='+pdfModuleRetry:''))}){
  const $=s=>document.querySelector(s),dialog=$('#planDialog'),canvas=$('#planCanvas'),ctx=canvas.getContext('2d');
  const source=document.createElement('canvas'),sx=source.getContext('2d',{willReadFrequently:true});
  let lines=[],pending=null,pointer=null,pdf=null,pdfTask=null,renderTask=null,epoch=0,busy=false,undo=[],redo=[],hasSource=false,cad=null,cadAbort=null,cadDirty=false,zoom=1,loadingImage=null,imageURL=null,fromModel=false,sourceAspect=null,sourceWall='#e9e4d8',calibration=null,lastBuiltDesign=null,pendingSnapshot=null;
- let exclusions=[],exclusionPreview=null;
+ let exclusions=[],exclusionPreview=null,semantic;
  const status=t=>{$('#planStatus').textContent=t;};
  function controls(){
+  const locked=busy||!!semantic?.busy;
   const ready=source.width>=8;
   const known=+$('#planKnownLength').value;
-  $('#planBuild').disabled=busy||!!exclusionPreview||cadDirty||!lines.length||!!calibration&&(!Number.isFinite(known)||known<.1||known>60||known/calibration.unitLength<1||known/calibration.unitLength>60);
-  for(const id of ['planDoorSpan','planExclude','planShowOriginal','planQuickCrop','planStrongLines'])$('#'+id).disabled=busy||!ready;
-  $('#planShowOriginal').disabled=busy||!ready||fromModel;
-  $('#planApplyExclusion').disabled=busy||!exclusionPreview?.removed.length;
-  $('#planDetect').disabled=busy||!ready||fromModel;
-  for(const id of ['planFile','planPage','cadApply','cadLayers','cadUnit','cadScale','planTool','planDoorWidth','planWindowWidth'])$('#'+id).disabled=busy;
-  for(const id of ['planThreshold','planMinLength','planThinLines'])$('#'+id).disabled=busy||!!cad||fromModel;
-  $('#planUndo').disabled=busy||!undo.length;$('#planRedo').disabled=busy||!redo.length;
+  $('#planBuild').disabled=locked||!!semantic?.pending||!!exclusionPreview||cadDirty||!lines.length||!!calibration&&(!Number.isFinite(known)||known<.1||known>60||known/calibration.unitLength<1||known/calibration.unitLength>60);
+  for(const id of ['planDoorSpan','planExclude','planShowOriginal','planQuickCrop','planStrongLines'])$('#'+id).disabled=locked||!ready;
+  $('#planShowOriginal').disabled=locked||!ready||fromModel;
+  $('#planApplyExclusion').disabled=locked||!exclusionPreview?.removed.length;
+  $('#planDetect').disabled=locked||!ready||fromModel;
+  for(const id of ['planFile','planPage','cadApply','cadLayers','cadUnit','cadScale','planTool','planDoorWidth','planWindowWidth'])$('#'+id).disabled=locked;
+  for(const id of ['planThreshold','planMinLength','planThinLines'])$('#'+id).disabled=locked||!!cad||fromModel;
+  $('#planUndo').disabled=locked||!undo.length;$('#planRedo').disabled=locked||!redo.length;
   $('#planZoomIn').disabled=!ready||zoom>=4;$('#planZoomOut').disabled=!ready||zoom<=1;$('#planZoomFit').disabled=!ready;
  }
  const setBusy=v=>{busy=v;controls();};
@@ -34,8 +37,8 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   $('#planZoomValue').textContent=`${Math.round(zoom*100)}%`;controls();
  }
  const savedFields=['planName','planWidth','planHeight','planThickness','planRoof','planKnownLength','planThreshold','planMinLength','planThinLines','cadUnit','cadScale'];
- function snapshotEditor(){return {width:source.width,height:source.height,pixels:source.width>=8?sx.getImageData(0,0,source.width,source.height):null,lines:structuredClone(lines),exclusions:structuredClone(exclusions),undo:[...undo],redo:[...redo],calibration:calibration&&{...calibration},hasSource,cad,cadDirty,fromModel,sourceAspect,sourceWall,pdf,pdfTask,zoom,fields:Object.fromEntries(savedFields.map(id=>[id,$('#'+id).type==='checkbox'?$('#'+id).checked:$('#'+id).value])),sourceInfo:$('#planSourceInfo').textContent,cadHidden:$('#cadOptions').hidden,pageHidden:$('#planPageRow').hidden,pageOptions:[...$('#planPage').children].map(o=>({value:o.value,text:o.textContent})),pageValue:$('#planPage').value};}
- function restoreEditor(s){if(!s)return;source.width=s.width;source.height=s.height;if(s.pixels)sx.putImageData(s.pixels,0,0);lines=s.lines;exclusions=s.exclusions;exclusionPreview=null;undo=s.undo;redo=s.redo;calibration=s.calibration;hasSource=s.hasSource;cad=s.cad;cadDirty=s.cadDirty;fromModel=s.fromModel;sourceAspect=s.sourceAspect;sourceWall=s.sourceWall;pdf=s.pdf;pdfTask=s.pdfTask;for(const [id,value] of Object.entries(s.fields)){const el=$('#'+id);if(el.type==='checkbox')el.checked=value;else el.value=value;}$('#planSourceInfo').textContent=s.sourceInfo;$('#cadOptions').hidden=s.cadHidden;$('#planPageRow').hidden=s.pageHidden;$('#planPage').replaceChildren();for(const o of s.pageOptions){const option=document.createElement('option');option.value=o.value;option.textContent=o.text;$('#planPage').append(option);}$('#planPage').value=s.pageValue;setZoom(s.zoom);draw();}
+ function snapshotEditor(){return {semantic:semantic.snapshot(),width:source.width,height:source.height,pixels:source.width>=8?sx.getImageData(0,0,source.width,source.height):null,lines:structuredClone(lines),exclusions:structuredClone(exclusions),undo:[...undo],redo:[...redo],calibration:calibration&&{...calibration},hasSource,cad,cadDirty,fromModel,sourceAspect,sourceWall,pdf,pdfTask,zoom,fields:Object.fromEntries(savedFields.map(id=>[id,$('#'+id).type==='checkbox'?$('#'+id).checked:$('#'+id).value])),sourceInfo:$('#planSourceInfo').textContent,cadHidden:$('#cadOptions').hidden,pageHidden:$('#planPageRow').hidden,pageOptions:[...$('#planPage').children].map(o=>({value:o.value,text:o.textContent})),pageValue:$('#planPage').value};}
+ function restoreEditor(s){if(!s)return;source.width=s.width;source.height=s.height;semantic.restore(s.semantic);if(s.pixels)sx.putImageData(s.pixels,0,0);lines=s.lines;exclusions=s.exclusions;exclusionPreview=null;undo=s.undo;redo=s.redo;calibration=s.calibration;hasSource=s.hasSource;cad=s.cad;cadDirty=s.cadDirty;fromModel=s.fromModel;sourceAspect=s.sourceAspect;sourceWall=s.sourceWall;pdf=s.pdf;pdfTask=s.pdfTask;for(const [id,value] of Object.entries(s.fields)){const el=$('#'+id);if(el.type==='checkbox')el.checked=value;else el.value=value;}$('#planSourceInfo').textContent=s.sourceInfo;$('#cadOptions').hidden=s.cadHidden;$('#planPageRow').hidden=s.pageHidden;$('#planPage').replaceChildren();for(const o of s.pageOptions){const option=document.createElement('option');option.value=o.value;option.textContent=o.text;$('#planPage').append(option);}$('#planPage').value=s.pageValue;setZoom(s.zoom);draw();}
  function cancelRead(){
   if(!busy)return;
   ++epoch;cadAbort?.abort();cadAbort=null;
@@ -46,12 +49,13 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   status('図面の読み取りを中止しました。もう一度ファイルを選べます。');
  }
  function exclude(candidate,regions){const scale=(+$('#planWidth').value||10)/source.width,vertical=(+$('#planWidth').value||10)*(sourceAspect??source.height/source.width)/source.height;return excludePlanRegions(candidate,regions,{minLength:.031/Math.min(scale,vertical)});}
- function editState(){return JSON.stringify({lines,exclusions});}
- function restoreEditState(state){({lines,exclusions}=JSON.parse(state));pending=null;exclusionPreview=null;}
- function history(){undo.push(editState());if(undo.length>30)undo.shift();redo=[];}
+ function editState(){return JSON.stringify({lines,exclusions,semantic:semantic.snapshot()});}
+ function restoreEditState(state){const parsed=JSON.parse(state);({lines,exclusions}=parsed);semantic.restore(parsed.semantic);pending=null;exclusionPreview=null;}
+ function history(){undo.push(editState());if(undo.length>30)undo.shift();redo=[];semantic.invalidate();}
  function draw(){
   canvas.hidden=source.width<8;canvas.width=source.width;canvas.height=source.height;ctx.drawImage(source,0,0);ctx.lineWidth=Math.max(2,source.width/400);
   if(!$('#planShowOriginal').checked){
+  semantic?.draw(ctx);
   for(const l of exclusionPreview?.lines??lines){ctx.strokeStyle=l.kind==='door'?'#d07a13':l.kind==='window'?'#2283b4':'#e13447';ctx.beginPath();ctx.moveTo(l.x1,l.y1);ctx.lineTo(l.x2,l.y2);ctx.stroke();}
   if(exclusionPreview){ctx.strokeStyle='#727b81';for(const l of exclusionPreview.removed){ctx.beginPath();ctx.moveTo(l.x1,l.y1);ctx.lineTo(l.x2,l.y2);ctx.stroke();}}
   for(const r of [...exclusions,...(exclusionPreview?[exclusionPreview.rect]:[])]){ctx.strokeStyle='#94631b';ctx.beginPath();ctx.moveTo(r.left,r.top);ctx.lineTo(r.right,r.top);ctx.lineTo(r.right,r.bottom);ctx.lineTo(r.left,r.bottom);ctx.lineTo(r.left,r.top);ctx.stroke();}
@@ -63,9 +67,9 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   $('#planExclusionSummary').textContent=exclusionPreview?`灰色の ${exclusionPreview.removed.length} 区間を壁から除外します。赤い線は残ります。実際の壁まで灰色になっていないか確認してください。除外で残る3cm未満の短い断片も除きます。`:'';
   $('#planExcludedCount').textContent=exclusions.length?`除外範囲：${exclusions.length} か所（再解析でも維持${undo.length?'・「戻す」で取り消せます':''}）`:'';
   const width=+$('#planWidth').value,depth=width*(sourceAspect??source.height/source.width);$('#planDimensions').textContent=source.width>=8&&Number.isFinite(width)&&Number.isFinite(depth)?`図面全体：幅 ${width.toFixed(3)} m × 奥行 ${depth.toFixed(3)} m`:'';
-  controls();
+  controls();semantic?.render();
  }
- function clearEdits(){lines=[];undo=[];redo=[];pending=null;pointer=null;calibration=null;exclusions=[];exclusionPreview=null;$('#planShowOriginal').checked=false;}
+ function clearEdits(){semantic?.reset();lines=[];undo=[];redo=[];pending=null;pointer=null;calibration=null;exclusions=[];exclusionPreview=null;$('#planShowOriginal').checked=false;}
  function safeTool(){pending=null;pointer=null;exclusionPreview=null;$('#planTool').value='pan';canvas.style.touchAction='pan-x pan-y';canvas.style.cursor='grab';}
  function applyCalibration(){
   if(!calibration)return;
@@ -107,6 +111,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
    cad=null;cadDirty=false;cadAbort=null;fromModel=true;hasSource=true;sourceAspect=snapshot.design.depth/snapshot.design.width;sourceWall=snapshot.design.wall;
    $('#cadOptions').hidden=true;$('#planPageRow').hidden=true;clearEdits();safeTool();
    source.width=snapshot.pixelWidth;source.height=snapshot.pixelHeight;sx.fillStyle='white';sx.fillRect(0,0,source.width,source.height);lines=snapshot.lines;
+   semantic.loadAnnotations(snapshot.design.annotations);
    for(const [id,key]of Object.entries({planName:'name',planWidth:'width',planHeight:'height',planThickness:'thickness',planRoof:'roof'}))$('#'+id).value=String(snapshot.design[key]);
    $('#planSourceInfo').textContent=`編集中：${snapshot.design.name||'名前なし'} の3Dの壁（原図の画像は含みません）`;
    setZoom(1);draw();status('表示中の3Dから壁・窓・出入口を読み込みました。修正後に「修正を反映して3Dを表示」を押してください。保存済みの案は上書きしません。');
@@ -114,17 +119,18 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   }catch(e){status(e.message);if(!dialog.open){onOpen();dialog.showModal();}}
  }
  function buildPreview(automatic=false){
-  if(busy&&!automatic||exclusionPreview)return;
+  if(busy&&!automatic||semantic.busy||exclusionPreview)return;
+  if(semantic.pending){status('部屋候補に確認待ちがあります。名称・範囲を確認して、採用または除外を選んでください。');return;}
   if(cadDirty){status('CAD設定を反映してから3Dを作成してください。');return;}
   if(automatic&&(!dialog.open||!$('#planAutoPreview').checked||!lines.length||!cad&&!fromModel&&rasterReviewNeeded(lines)))return;
-  try{const d=makePlanDesign(lines,source.width,source.height,{name:$('#planName').value,width:+$('#planWidth').value,depth:sourceAspect===null?undefined:+$('#planWidth').value*sourceAspect,wall:sourceWall,height:+$('#planHeight').value,thickness:+$('#planThickness').value,roof:$('#planRoof').value});
+  try{const d=makePlanDesign(lines,source.width,source.height,{name:$('#planName').value,width:+$('#planWidth').value,depth:sourceAspect===null?undefined:+$('#planWidth').value*sourceAspect,wall:sourceWall,height:+$('#planHeight').value,thickness:+$('#planThickness').value,roof:$('#planRoof').value,annotations:semantic.annotations()});
    onBuild(d,{automatic});lastBuiltDesign=JSON.stringify(d);status('3Dを生成しました。ページ・壁線・実寸を確認し、必要に応じて修正して更新してください。');$('#openPlanImport').textContent='図面を選ぶ・読取結果を修正';setBusy(false);dialog.close();
   }catch(e){status('3D化できませんでした。壁線と寸法を修正してください。'+e.message);}
  }
  async function renderPage({auto=false,unconfirmed=false}={}){
   const pageNumber=+$('#planPage').value;if(!pdf||!Number.isInteger(pageNumber)||pageNumber<1||pageNumber>pdf.numPages)return;
   const id=++epoch;setBusy(true);clearEdits();draw();status('PDFのページを読み込んでいます…');
-  try{const page=await pdf.getPage(pageNumber);if(id!==epoch)return;const view=page.getViewport({scale:1});const viewport=page.getViewport({scale:Math.min(2,1200/Math.max(view.width,view.height))});source.width=Math.ceil(viewport.width);source.height=Math.ceil(viewport.height);renderTask=page.render({canvasContext:sx,viewport,background:'#ffffff'});await renderTask.promise;if(id!==epoch)return;renderTask=null;clearEdits();setZoom(1);detect();if(auto)buildPreview(true);else status(unconfirmed?'平面図と判定できませんでした。赤い壁線と実寸を確認してから「修正を反映して3Dを表示」を押してください。':`${pageNumber}ページ目を表示しました。赤い壁線と実寸を確認してから「修正を反映して3Dを表示」を押してください。`);}catch(e){if(id===epoch){clearEdits();draw();status('PDFを表示できませんでした。通信を確認して再度選ぶか、ページを読み込み直してください。');return false;}}finally{if(id===epoch)setBusy(false);}
+  try{const page=await pdf.getPage(pageNumber);if(id!==epoch)return;const view=page.getViewport({scale:1});const viewport=page.getViewport({scale:Math.min(2,1200/Math.max(view.width,view.height))});source.width=Math.ceil(viewport.width);source.height=Math.ceil(viewport.height);renderTask=page.render({canvasContext:sx,viewport,background:'#ffffff'});await renderTask.promise;if(id!==epoch)return;renderTask=null;clearEdits();setZoom(1);detect();try{semantic.setPDF(await pdfPlanTokens(page,viewport));}catch{semantic.setPDF([]);}if(id!==epoch)return;setBusy(false);if($('#planReadLabels').checked)await semantic.analyze();if(id!==epoch)return;if(auto)buildPreview(true);else status(unconfirmed?'平面図と判定できませんでした。赤い壁線と実寸を確認してから「修正を反映して3Dを表示」を押してください。':`${pageNumber}ページ目を表示しました。赤い壁線と実寸を確認してから「修正を反映して3Dを表示」を押してください。`);}catch(e){if(id===epoch){clearEdits();draw();status('PDFを表示できませんでした。通信を確認して再度選ぶか、ページを読み込み直してください。');return false;}}finally{if(id===epoch)setBusy(false);}
  }
  async function load(file){
   if(!file)return;if(file.size>25*1024*1024){status('25MB以下のPDF・画像・CADを選んでください。');return;}
@@ -149,16 +155,17 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
    if(!/^image\/(png|jpeg|webp)$/.test(file.type)&&!(/\.(png|jpe?g|webp)$/i.test(file.name)))throw Error('PDF・JPG・PNG・WebP・DXF・DWG・JWWに対応しています。');
    const url=URL.createObjectURL(file);
    try{const img=new Image();loadingImage=img;imageURL=url;img.src=url;await img.decode();if(id!==epoch)return;if(!img.naturalWidth||img.naturalWidth*img.naturalHeight>50000000)throw Error('画像が大きすぎます。縮小して読み込んでください。');const scale=Math.min(1,1200/Math.max(img.naturalWidth,img.naturalHeight));source.width=Math.max(8,Math.round(img.naturalWidth*scale));source.height=Math.max(8,Math.round(img.naturalHeight*scale));sx.fillStyle='white';sx.fillRect(0,0,source.width,source.height);sx.drawImage(img,0,0,source.width,source.height);}finally{URL.revokeObjectURL(url);if(imageURL===url){imageURL=null;loadingImage=null;}}
-   draw();detect();buildPreview(true);pendingSnapshot=null;Promise.resolve(previousTask?.destroy()).catch(()=>{});
+   draw();detect();setBusy(false);if($('#planReadLabels').checked)await semantic.analyze();if(id!==epoch)return;buildPreview(true);pendingSnapshot=null;Promise.resolve(previousTask?.destroy()).catch(()=>{});
   }catch(e){if(id!==epoch&&!(id+1===epoch&&pendingSnapshot===previous))return;if(file.type==='application/pdf'||/\.pdf$/i.test(file.name))pdfModuleRetry++;if(pdfTask&&pdfTask!==previousTask)Promise.resolve(pdfTask.destroy()).catch(()=>{});restoreEditor(previous);pendingSnapshot=null;const hint=file.type==='application/pdf'||/\.pdf$/i.test(file.name)?'通信を確認して同じPDFを再選択してください。直らない場合はこのページを再読み込みしてください。':/\.(png|jpe?g|webp)$/i.test(file.name)?'画像の形式と破損の有無を確認してください。':/\.(dxf|dwg|jww)$/i.test(file.name)?'CADの形式と対応版を確認してください。':'対応形式はPDF・JPG・PNG・WebP・DXF・DWG・JWWです。';status('読み込めませんでした。元の図面と編集内容を保持しました。'+hint);}finally{if(id===epoch)setBusy(false);}
  }
  function point(e){const r=canvas.getBoundingClientRect();return {x:Math.max(0,Math.min(source.width-1,(e.clientX-r.left)*source.width/r.width)),y:Math.max(0,Math.min(source.height-1,(e.clientY-r.top)*source.height/r.height))};}
  function applyPoint(p){
   const tool=$('#planTool').value;if(tool==='pan'||$('#planShowOriginal').checked)return;
   if(exclusionPreview){status('除外する線を確認し「この範囲を除外」か「キャンセル」を押してください。');return;}
-  if(tool==='doorSpan'||tool==='exclude'||tool==='crop'||tool==='wall'||tool==='scale'){
+  if(tool==='semantic'||tool==='doorSpan'||tool==='exclude'||tool==='crop'||tool==='wall'||tool==='scale'){
    if(!pending){pending=p;draw();return;}
    const a=pending;pending=null;
+   if(tool==='semantic'){semantic.setRect(a,p);draw();return;}
    if(tool==='doorSpan'){
     const horizontal=Math.abs(p.x-a.x)>=Math.abs(p.y-a.y),end=(cad||fromModel)?p:{x:horizontal?p.x:a.x,y:horizontal?a.y:p.y};
     const width=+$('#planWidth').value,metres=planSegmentMetres(a,end,source.width,source.height,width,width*(sourceAspect??source.height/source.width));
@@ -169,7 +176,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
    if(tool==='exclude'){const rect=reviewRect(a,p);exclusionPreview={rect,...exclude(lines,[rect])};$('#planShowOriginal').checked=false;draw();status(exclusionPreview.removed.length?'灰色の線が除外対象です。実際の壁は囲まないでください。確認後に反映できます。':'この範囲に除外する壁線はありません。窓と出入口は保持します。');$('#planExclusionReview').scrollIntoView?.({block:'nearest',behavior:'instant'});return;}
    if(tool==='crop'){
     const x=Math.floor(Math.min(a.x,p.x)),y=Math.floor(Math.min(a.y,p.y)),w=Math.floor(Math.abs(a.x-p.x)),h=Math.floor(Math.abs(a.y-p.y));if(w<30||h<30)throw Error('切り抜く範囲を広げてください。');
-    const pixels=sx.getImageData(x,y,w,h);const previousWidth=source.width,previousHeight=source.height,keepScale=!!cad||fromModel||!!calibration;if(sourceAspect!==null)sourceAspect*=h/previousHeight*previousWidth/w;source.width=w;source.height=h;sx.putImageData(pixels,0,0);$('#planWidth').value=(+$('#planWidth').value*(keepScale?w/previousWidth:1)).toFixed(3);const cropped=clipCADLines(lines,x,y,w,h),croppedExclusions=cropReviewRegions(exclusions,x,y,w,h);clearEdits();lines=cropped;exclusions=croppedExclusions;safeTool();draw();status('編集した壁・開口部・除外範囲を保持して切り抜きました。'+(rasterReviewNeeded(lines)&&!cad&&!fromModel?'まだ線が多いため「線幅で絞る」を試し、赤い線を確認してください。':'赤い壁線と図面の横幅を実寸に合わせてください。')+'元に戻すには元の図面か表示中の3Dから読み直してください。');return;
+    const semantics=semantic.snapshot();const pixels=sx.getImageData(x,y,w,h);const previousWidth=source.width,previousHeight=source.height,keepScale=!!cad||fromModel||!!calibration;if(sourceAspect!==null)sourceAspect*=h/previousHeight*previousWidth/w;source.width=w;source.height=h;sx.putImageData(pixels,0,0);$('#planWidth').value=(+$('#planWidth').value*(keepScale?w/previousWidth:1)).toFixed(3);const cropped=clipCADLines(lines,x,y,w,h),croppedExclusions=cropReviewRegions(exclusions,x,y,w,h);clearEdits();semantic.restore(semantics);semantic.crop(x,y,w,h);lines=cropped;exclusions=croppedExclusions;safeTool();draw();status('編集した壁・開口部・除外範囲を保持して切り抜きました。'+(rasterReviewNeeded(lines)&&!cad&&!fromModel?'まだ線が多いため「線幅で絞る」を試し、赤い線を確認してください。':'赤い壁線と図面の横幅を実寸に合わせてください。')+'元に戻すには元の図面か表示中の3Dから読み直してください。');return;
    }
    if(tool==='scale'){const length=Math.hypot(a.x-p.x,a.y-p.y),unitLength=planSegmentMetres(a,p,source.width,source.height,1,sourceAspect??source.height/source.width);if(length<10||!Number.isFinite(unitLength)||unitLength<=0)throw Error('既知の長さと2点を確認してください。');calibration={unitLength};applyCalibration();return;}
    if(Math.hypot(a.x-p.x,a.y-p.y)<6)throw Error('壁の線をもう少し長くしてください。');history();const horizontal=Math.abs(p.x-a.x)>=Math.abs(p.y-a.y);lines.push({x1:a.x,y1:a.y,x2:(cad||fromModel)?p.x:horizontal?p.x:a.x,y2:(cad||fromModel)?p.y:horizontal?a.y:p.y,kind:'wall'});
@@ -181,7 +188,8 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   }
   draw();status('編集しました。赤い線が実際の壁に合うように調整してください。');
  }
- canvas.addEventListener('pointerdown',e=>{if(busy||pointer!==null||$('#planTool').value==='pan'||$('#planShowOriginal').checked)return;e.preventDefault();pointer={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
+ semantic=setupSemanticReview({readOCR,getSource:()=>({canvas:source,width:source.width,height:source.height,canRead:source.width>=8&&!cad&&!fromModel&&!busy}),getLines:()=>lines,changed:()=>{draw();controls();},setTool:tool=>{$('#planTool').value=tool;$('#planTool').onchange();$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});},previewExclusion:rect=>{exclusionPreview={rect,...exclude(lines,[rect])};$('#planShowOriginal').checked=false;draw();$('#planExclusionReview').scrollIntoView?.({block:'nearest',behavior:'instant'});}});
+ canvas.addEventListener('pointerdown',e=>{if(busy||semantic.busy||pointer!==null||$('#planTool').value==='pan'||$('#planShowOriginal').checked)return;e.preventDefault();pointer={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
  canvas.addEventListener('pointerup',e=>{if(e.pointerId!==pointer?.id)return;const start=pointer;pointer=null;if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>12)return;try{applyPoint(point(e));}catch(err){pending=null;draw();status(err.message);}});
  canvas.addEventListener('pointercancel',()=>{pointer=null;pending=null;draw();});
  canvas.addEventListener('lostpointercapture',()=>{pointer=null;});
@@ -202,6 +210,6 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  for(const id of ['cadLayers','cadUnit','cadScale'])$('#'+id).onchange=()=>{cadDirty=true;$('#planBuild').disabled=true;status('設定を変更しました。「CAD設定を反映」で線と実寸を更新してください。');};
  $('#editCurrentPlan').onclick=editCurrentModel;$('#planKnownLength').addEventListener('input',applyCalibration);$('#planWidth').addEventListener('input',()=>{calibration=null;draw();});
  $('#planBuild').onclick=()=>buildPreview(false);
- $('#openPlanImport').onclick=()=>{const current=getDesign();if(current?.version===2&&lastBuiltDesign&&JSON.stringify(current)!==lastBuiltDesign){editCurrentModel();return;}safeTool();draw();onOpen();dialog.showModal();};$('#closePlanImport').onclick=()=>dialog.close();dialog.addEventListener('close',()=>{cancelRead();pending=null;pointer=null;exclusionPreview=null;onClose();});
+ $('#openPlanImport').onclick=()=>{const current=getDesign();if(current?.version===2&&lastBuiltDesign&&JSON.stringify(current)!==lastBuiltDesign){editCurrentModel();return;}safeTool();draw();onOpen();dialog.showModal();};$('#closePlanImport').onclick=()=>dialog.close();dialog.addEventListener('close',()=>{semantic.cancel();cancelRead();pending=null;pointer=null;exclusionPreview=null;onClose();});
  source.width=source.height=1;sx.fillStyle='white';sx.fillRect(0,0,1,1);safeTool();draw();setZoom(1);
 }
