@@ -1,10 +1,10 @@
-import {setupSemanticReview} from './plan-semantic-ui.mjs?v=20261123-semantic2';
-import {pdfPlanTokens} from './plan-ocr.mjs?v=20261123-semantic2';
+import {setupSemanticReview} from './plan-semantic-ui.mjs?v=20261123-build-access';
+import {pdfPlanTokens} from './plan-ocr.mjs?v=20261123-build-access';
 import {cadVectors,cadPreview,clipCADLines} from './cad-core.mjs';
 import {readCAD} from './cad-runtime.mjs';
 import {chooseFloorPlanPage} from './plan-pages.mjs';
-import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261123-semantic2';
-import {insertPlanDoor,detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261123-semantic2';
+import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261123-build-access';
+import {insertPlanDoor,detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261123-build-access';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 let pdfModuleRetry=0;
 export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadCAD=readCAD,readOCR,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs'+(pdfModuleRetry?'?retry='+pdfModuleRetry:''))}){
@@ -13,12 +13,25 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  let lines=[],pending=null,pointer=null,pdf=null,pdfTask=null,renderTask=null,epoch=0,busy=false,undo=[],redo=[],hasSource=false,cad=null,cadAbort=null,cadDirty=false,zoom=1,loadingImage=null,imageURL=null,fromModel=false,sourceAspect=null,sourceWall='#e9e4d8',calibration=null,lastBuiltDesign=null,pendingSnapshot=null;
  let exclusions=[],exclusionPreview=null,semantic;
  const status=t=>{$('#planStatus').textContent=t;};
+ function buildIssue(wallsOnly=false,automatic=false){
+  if(busy&&!automatic||semantic?.busy)return '図面を読み取り中です。完了するまでお待ちください。';
+  if(exclusionPreview)return '線の除外が確認待ちです。「この範囲を除外」または「キャンセル」を選んでください。';
+  if(cadDirty)return 'CAD設定を変更しています。「CAD設定を反映」を押してください。';
+  if(!lines.length)return '壁の線がありません。図面データを取り込み、壁線を確認してください。';
+  const known=+$('#planKnownLength').value;
+  if(calibration&&(!Number.isFinite(known)||known<.1||known>60||known/calibration.unitLength<1||known/calibration.unitLength>60))return '実寸の設定を確認してください。既知の長さは0.1〜60m、計算後の図面幅は1〜60mです。';
+  if(!wallsOnly&&semantic?.pending)return '部屋候補に確認待ちがあります。候補を確認するか、「部屋名なしで3Dを表示」を選べます。';
+  return '';
+ }
  function controls(){
   const locked=busy||!!semantic?.busy;
   const ready=source.width>=8;
-  const known=+$('#planKnownLength').value;
   $('#planAutoPreview').disabled=locked||$('#planReadLabels').checked;
-  $('#planBuild').disabled=locked||!!semantic?.pending||!!exclusionPreview||cadDirty||!lines.length||!!calibration&&(!Number.isFinite(known)||known<.1||known>60||known/calibration.unitLength<1||known/calibration.unitLength>60);
+  const issue=buildIssue();$('#planBuild').disabled=!!issue;
+  $('#planBuildReason').textContent=issue;$('#planBuildReason').hidden=!issue;
+  $('#planReviewPending').hidden=!semantic?.pending;$('#planReviewPending').disabled=locked;
+  $('#planBuildWalls').hidden=!semantic?.pending;$('#planBuildWalls').disabled=!!buildIssue(true);
+  $('#planBuildWallsNote').hidden=!semantic?.pending;
   for(const id of ['planDoorSpan','planExclude','planShowOriginal','planQuickCrop','planStrongLines'])$('#'+id).disabled=locked||!ready;
   $('#planShowOriginal').disabled=locked||!ready||fromModel;
   $('#planApplyExclusion').disabled=locked||!exclusionPreview?.removed.length;
@@ -119,12 +132,10 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
    onOpen();dialog.showModal();
   }catch(e){status(e.message);if(!dialog.open){onOpen();dialog.showModal();}}
  }
- function buildPreview(automatic=false){
-  if(busy&&!automatic||semantic.busy||exclusionPreview)return;
-  if(semantic.pending){status('部屋候補に確認待ちがあります。名称・範囲を確認して、採用または除外を選んでください。');return;}
-  if(cadDirty){status('CAD設定を反映してから3Dを作成してください。');return;}
+ function buildPreview(automatic=false,wallsOnly=false){
+  const issue=buildIssue(wallsOnly,automatic);if(issue){status(issue);return;}
   if(automatic&&($('#planReadLabels').checked||!dialog.open||!$('#planAutoPreview').checked||!lines.length||!cad&&!fromModel&&rasterReviewNeeded(lines)))return;
-  try{const d=makePlanDesign(lines,source.width,source.height,{name:$('#planName').value,width:+$('#planWidth').value,depth:sourceAspect===null?undefined:+$('#planWidth').value*sourceAspect,wall:sourceWall,height:+$('#planHeight').value,thickness:+$('#planThickness').value,roof:$('#planRoof').value,annotations:semantic.annotations()});
+  try{const d=makePlanDesign(lines,source.width,source.height,{name:$('#planName').value,width:+$('#planWidth').value,depth:sourceAspect===null?undefined:+$('#planWidth').value*sourceAspect,wall:sourceWall,height:+$('#planHeight').value,thickness:+$('#planThickness').value,roof:$('#planRoof').value,annotations:wallsOnly?[]:semantic.annotations()});
    onBuild(d,{automatic});lastBuiltDesign=JSON.stringify(d);status('3Dを生成しました。ページ・壁線・実寸を確認し、必要に応じて修正して更新してください。');$('#openPlanImport').textContent='図面を選ぶ・読取結果を修正';setBusy(false);dialog.close();
   }catch(e){status('3D化できませんでした。壁線と寸法を修正してください。'+e.message);}
  }
@@ -208,9 +219,11 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  $('#planUndo').onclick=()=>{if(busy||!undo.length)return;redo.push(editState());restoreEditState(undo.pop());pending=null;draw();};
  $('#planRedo').onclick=()=>{if(busy||!redo.length)return;undo.push(editState());restoreEditState(redo.pop());pending=null;draw();};
  $('#cadApply').onclick=()=>{if(!busy&&cad)applyCAD();};
- for(const id of ['cadLayers','cadUnit','cadScale'])$('#'+id).onchange=()=>{cadDirty=true;$('#planBuild').disabled=true;status('設定を変更しました。「CAD設定を反映」で線と実寸を更新してください。');};
+ for(const id of ['cadLayers','cadUnit','cadScale'])$('#'+id).onchange=()=>{cadDirty=true;controls();status('設定を変更しました。「CAD設定を反映」で線と実寸を更新してください。');};
  $('#editCurrentPlan').onclick=editCurrentModel;$('#planKnownLength').addEventListener('input',applyCalibration);$('#planWidth').addEventListener('input',()=>{calibration=null;draw();});
  $('#planReadLabels').onchange=controls;$('#planBuild').onclick=()=>buildPreview(false);
+ $('#planBuildWalls').onclick=()=>buildPreview(false,true);
+ $('#planReviewPending').onclick=()=>semantic.reviewPending();
  $('#openPlanImport').onclick=()=>{const current=getDesign();if(current?.version===2&&lastBuiltDesign&&JSON.stringify(current)!==lastBuiltDesign){editCurrentModel();return;}safeTool();draw();onOpen();dialog.showModal();};$('#closePlanImport').onclick=()=>dialog.close();dialog.addEventListener('close',()=>{semantic.cancel();cancelRead();pending=null;pointer=null;exclusionPreview=null;onClose();});
  source.width=source.height=1;sx.fillStyle='white';sx.fillRect(0,0,1,1);safeTool();draw();setZoom(1);
 }

@@ -35,6 +35,7 @@ export function setupSemanticReview({getSource,getLines,changed,setTool,previewE
  $('#semanticInner').onclick=()=>{const c=selectedCandidate();if(!c)return;const r=c.rect,pad=Math.max(4,Math.min(r.right-r.left,r.bottom-r.top)*.08);if(r.right-r.left<=pad*2||r.bottom-r.top<=pad*2)return;previewExclusion({left:r.left+pad,right:r.right-pad,top:r.top+pad,bottom:r.bottom-pad});$('#semanticMessage').textContent='候補の内側の線を灰色にしました。実際の間仕切り壁が含まれることがあります。線を確認してから除外を反映してください。';};
  return {
   analyze,cancel,render,get busy(){return busy;},get pending(){return candidates.some(c=>c.state==='pending');},
+  reviewPending(){const c=candidates.find(c=>c.state==='pending');if(!c)return;selected=c.id;change();$('#semanticDetails').scrollIntoView?.({block:'start',behavior:'instant'});},
   setPDF(tokens){pdfTokens=tokens;},
   snapshot(){return {candidates:structuredClone(candidates),selected,pdfTokens:structuredClone(pdfTokens)};},
   restore(s){candidates=s?.candidates??[];selected=s?.selected??null;pdfTokens=s?.pdfTokens??[];render();},

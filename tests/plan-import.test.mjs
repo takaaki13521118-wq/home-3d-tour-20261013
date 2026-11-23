@@ -205,3 +205,18 @@ semanticOCR=async()=>{throw Error('offline');};await $('#semanticAnalyze').oncli
 let finishOCR;semanticOCR=()=>new Promise(r=>finishOCR=r);const pendingOCR=$('#semanticAnalyze').onclick();$('#semanticCancel').onclick();finishOCR([{text:'収納',line:1,confidence:90,bbox:{x0:90,y0:75,x1:125,y1:95}}]);await pendingOCR;assert.equal($('#semanticList').children.length,0);assert.equal($('#planBuild').disabled,false);
 semanticOCR=async()=>[{text:'収納',line:1,confidence:90,bbox:{x0:90,y0:75,x1:125,y1:95}}];await $('#semanticAnalyze').onclick();assert.equal($('#semanticList').children.length,1);$('#semanticReject').onclick();assert.equal($('#planBuild').disabled,false);$('#planBuild').onclick();assert.equal(result.annotations,undefined);
 console.log('PASS: semantic OCR review, name edits, approval gate, model re-edit, undo, cancellation and retry');
+
+// A pending name must not trap users: explicitly preview walls and retain the review draft.
+await $('#semanticAnalyze').onclick();assert.equal($('#planBuild').disabled,true);
+assert.match($('#planBuildReason').textContent,/確認待ち/);assert.equal($('#planBuildReason').hidden,false);
+assert.equal($('#planBuildWalls').hidden,false);assert.equal($('#planBuildWalls').disabled,false);
+$('#planReviewPending').onclick();assert.equal($('#semanticName').value,'収納');
+result=null;$('#planBuildWalls').onclick();assert.equal(result.walls.length,4);assert.equal(result.annotations,undefined);assert.equal($('#planDialog').open,false);
+currentDesign=result;$('#openPlanImport').onclick();assert.equal($('#planDialog').open,true);assert.match($('#semanticSummary').textContent,/確認待ち 1 件/);assert.equal($('#semanticName').value,'収納');
+$('#planExclude').onclick();click(10,10);click(60,60);assert.equal($('#planBuildWalls').disabled,true);assert.match($('#planBuildReason').textContent,/線の除外/);result=null;$('#planBuildWalls').onclick();assert.equal(result,null);
+$('#planCancelExclusion').onclick();assert.equal($('#planBuildWalls').disabled,false);
+$('#planTool').value='scale';click(20,20);click(220,20);$('#planKnownLength').value='0';$('#planKnownLength').handlers.input();assert.equal($('#planBuildWalls').disabled,true);assert.match($('#planBuildReason').textContent,/実寸/);$('#planBuildWalls').onclick();assert.equal(result,null);
+$('#planKnownLength').value='5';$('#planKnownLength').handlers.input();assert.equal($('#planBuildWalls').disabled,false);
+$('#semanticAccept').onclick();assert.equal($('#planBuild').disabled,false);assert.equal($('#planBuildWalls').hidden,true);assert.equal($('#planBuildReason').hidden,true);
+$('#planBuild').onclick();assert.equal(result.annotations[0].name,'収納');
+console.log('PASS: bottom build reason, review navigation, walls-only preview, draft retention and geometry validation guards');
