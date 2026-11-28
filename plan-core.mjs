@@ -1,6 +1,6 @@
 import {inPolygon} from './plan-topology.mjs?v=20261128-rooms';
 import {validateAnnotations} from './plan-semantic.mjs?v=20261128-rooms';
-import {planSpaces} from './plan-space.mjs';
+import {planSpaces} from './plan-space.mjs?v=20261128-rooms';
 // Local, deterministic line detection. This is not semantic room/door recognition.
 export function detectWalls(image,{threshold=155,minLength=28,merge=5,minStroke=2}={}){
  const {width:w,height:h,data}=image;
