@@ -1,4 +1,5 @@
-import {validateAnnotations} from './plan-semantic.mjs?v=20261123-semantic2';
+import {inPolygon} from './plan-topology.mjs?v=20261128-rooms';
+import {validateAnnotations} from './plan-semantic.mjs?v=20261128-rooms';
 import {planSpaces} from './plan-space.mjs';
 // Local, deterministic line detection. This is not semantic room/door recognition.
 export function detectWalls(image,{threshold=155,minLength=28,merge=5,minStroke=2}={}){
@@ -38,20 +39,22 @@ export function validatePlanDesign(v){
   return {x1,z1,x2,z2,kind:w.kind};});
  if(!/^#[0-9a-f]{6}$/i.test(v.wall)||!['none','flat'].includes(v.roof))throw Error('外観の指定が不正です。');
  const annotations=validateAnnotations(v.annotations);
- return {...(annotations.length?{annotations}:{}),version:2,name:typeof v.name==='string'?v.name.slice(0,40):'図面から作成',width,depth,height,thickness:n(v.thickness,.06,.4),wall:v.wall,roof:v.roof,walls};
+ if(v.roomsReviewed!==undefined&&v.roomsReviewed!==true)throw Error('部屋輪郭の確認状態が不正です。');if(v.roomsReviewed&&(!annotations.length||annotations.some(a=>!a.polygon)))throw Error('確認した部屋の輪郭が必要です。');
+ return {...(v.roomsReviewed?{roomsReviewed:true}:{}),...(annotations.length?{annotations}:{}),version:2,name:typeof v.name==='string'?v.name.slice(0,40):'図面から作成',width,depth,height,thickness:n(v.thickness,.06,.4),wall:v.wall,roof:v.roof,walls};
 }
-export function makePlanDesign(lines,pixelWidth,pixelHeight,{width=10,depth:explicitDepth,height=2.6,thickness=.12,name='図面から作成',roof='none',wall='#e9e4d8',annotations}={}){
+export function makePlanDesign(lines,pixelWidth,pixelHeight,{width=10,depth:explicitDepth,height=2.6,thickness=.12,name='図面から作成',roof='none',wall='#e9e4d8',annotations,roomsReviewed}={}){
  const s=width/pixelWidth,round=v=>Math.round(v*10000)/10000;
  const depth=explicitDepth??round(pixelHeight*s),bounded=(v,half)=>v < -half-1e-8 || v > half+1e-8 ? v : Math.max(-half,Math.min(half,round(v)));
- return validatePlanDesign({version:2,name,width,depth,height,thickness,wall,roof,annotations,walls:lines.map(l=>({x1:bounded((l.x1-pixelWidth/2)*s,width/2),x2:bounded((l.x2-pixelWidth/2)*s,width/2),z1:bounded((l.y1/pixelHeight-.5)*depth,depth/2),z2:bounded((l.y2/pixelHeight-.5)*depth,depth/2),kind:l.kind||'wall'}))});
+ return validatePlanDesign({version:2,name,width,depth,height,thickness,wall,roof,annotations,...(roomsReviewed?{roomsReviewed:true}:{}),walls:lines.map(l=>({x1:bounded((l.x1-pixelWidth/2)*s,width/2),x2:bounded((l.x2-pixelWidth/2)*s,width/2),z1:bounded((l.y1/pixelHeight-.5)*depth,depth/2),z2:bounded((l.y2/pixelHeight-.5)*depth,depth/2),kind:l.kind||'wall'}))});
 }
 export function planSolids(d){return d.walls.filter(w=>w.kind!=='door').map(w=>({x:(w.x1+w.x2)/2,z:(w.z1+w.z2)/2,w:Math.hypot(w.x2-w.x1,w.z2-w.z1),d:d.thickness,angle:Math.atan2(w.z2-w.z1,w.x2-w.x1)}));}
 export function solidDistance(s,x,z){const c=Math.cos(s.angle||0),t=Math.sin(s.angle||0),dx=x-s.x,dz=z-s.z;return Math.hypot(Math.max(0,Math.abs(c*dx+t*dz)-s.w/2),Math.max(0,Math.abs(-t*dx+c*dz)-s.d/2));}
 export function planAllowed(d,x,z,solids=planSolids(d)){
+ const shapes=d.roomsReviewed?d.annotations.filter(a=>a.polygon):[];if(shapes.length&&!shapes.some(a=>inPolygon(a.polygon,x/d.width+.5,z/d.depth+.5))&&!d.walls.some(w=>w.kind==='door'&&solidDistance({x:(w.x1+w.x2)/2,z:(w.z1+w.z2)/2,w:Math.hypot(w.x2-w.x1,w.z2-w.z1),d:d.thickness,angle:Math.atan2(w.z2-w.z1,w.x2-w.x1)},x,z)<.1))return false;
  return Math.abs(x)<d.width/2-.12&&Math.abs(z)<d.depth/2-.12&&!solids.some(s=>solidDistance(s,x,z)<.1);
 }
 export function rasterReviewNeeded(lines){return lines.length>50;}
-export function planSpawn(d){const space=planSpaces(d);if(space.rooms.length)return {...space.rooms[0].point};const solids=planSolids(d);let best=null,score=-Infinity;for(let iz=1;iz<32;iz++)for(let ix=1;ix<32;ix++){const x=space.bounds.minX+ix/32*(space.bounds.maxX-space.bounds.minX),z=space.bounds.minZ+iz/32*(space.bounds.maxZ-space.bounds.minZ);if(!planAllowed(d,x,z,solids))continue;let clearance=Math.min(d.width/2-Math.abs(x),d.depth/2-Math.abs(z));for(const s of solids)clearance=Math.min(clearance,solidDistance(s,x,z));const weighted=clearance-.1*Math.hypot(x,z);if(weighted>score){best={x,z};score=weighted;}}return best;}
+export function planSpawn(d){const space=planSpaces(d);const room=space.rooms.find(r=>planAllowed(d,r.point.x,r.point.z));if(room)return {...room.point};const solids=planSolids(d);let best=null,score=-Infinity;for(let iz=1;iz<32;iz++)for(let ix=1;ix<32;ix++){const x=space.bounds.minX+ix/32*(space.bounds.maxX-space.bounds.minX),z=space.bounds.minZ+iz/32*(space.bounds.maxZ-space.bounds.minZ);if(!planAllowed(d,x,z,solids))continue;let clearance=Math.min(d.width/2-Math.abs(x),d.depth/2-Math.abs(z));for(const s of solids)clearance=Math.min(clearance,solidDistance(s,x,z));const weighted=clearance-.1*Math.hypot(x,z);if(weighted>score){best={x,z};score=weighted;}}return best;}
 export function closestLine(lines,x,y,maxDistance){let best=null;for(let i=0;i<lines.length;i++){const l=lines[i],dx=l.x2-l.x1,dy=l.y2-l.y1,len=dx*dx+dy*dy;if(!len)continue;const t=Math.max(0,Math.min(1,((x-l.x1)*dx+(y-l.y1)*dy)/len)),distance=Math.hypot(x-l.x1-t*dx,y-l.y1-t*dy);if(distance<=maxDistance&&(!best||distance<best.distance))best={index:i,t,distance};}return best;}
 export function addOpening(line,t,span,kind){const len=Math.hypot(line.x2-line.x1,line.y2-line.y1);const margin=Math.max(3,span*.12);if(len<span+2*margin)throw Error('この壁には開口部を追加する長さがありません。');const centre=Math.max(span/2+margin,Math.min(len-span/2-margin,t*len));const a=(centre-span/2)/len,b=(centre+span/2)/len;const part=(u,v,k)=>({x1:line.x1+(line.x2-line.x1)*u,y1:line.y1+(line.y2-line.y1)*u,x2:line.x1+(line.x2-line.x1)*v,y2:line.y1+(line.y2-line.y1)*v,kind:k});return [part(0,a,line.kind),part(a,b,kind),part(b,1,line.kind)];}
 // Open both outlines when a CAD wall is drawn as two nearby parallel lines.

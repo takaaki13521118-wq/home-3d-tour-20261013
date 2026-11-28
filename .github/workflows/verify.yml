@@ -29,6 +29,7 @@ jobs:
           node tests/plan-import.test.mjs
           node tests/runtime.test.mjs
           node tests/semantic.test.mjs
+          node tests/topology.test.mjs
       - name: Install pinned PDF renderer for verification
         run: npm install --prefix "$RUNNER_TEMP/pdf-test" --ignore-scripts --no-audit --no-fund pdfjs-dist@4.10.38 @napi-rs/canvas@0.1.68
       - name: Render a real PDF and detect its walls

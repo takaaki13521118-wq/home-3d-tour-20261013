@@ -35,3 +35,8 @@ console.log('PASS: OCR-only long-rule removal preserves original image and short
 const textStroke={x1:48,x2:48,y1:50,y2:70,kind:'wall'};
 assert.equal(suggestSpaces([token('キッチン')],[...lines,textStroke],200,180)[0].rect.left,10);
 console.log('PASS: OCR glyph strokes do not shrink room boundary proposals');
+
+let passes=0;const tileWorker={...worker,recognize:async()=>{passes++;return {data:{blocks:[{paragraphs:[{lines:[{words:[{text:'和室',confidence:88,bbox:{x0:10,y0:10,x1:40,y1:30}}]}]}]}]}};}};
+const tiles=await recognizePlan({width:1000,height:800},{load:async()=>({createWorker:async()=>tileWorker})});assert.equal(passes,6);assert(tiles.some(t=>String(t.line).startsWith('tile4-')&&t.bbox.x0>400&&t.bbox.y0>320));
+assert.equal(textCandidates([token('和室'),{...token('和室'),line:2}]).length,1);
+console.log('PASS: original/cleaned/tiled OCR passes preserve source coordinates and deduplicate overlapping labels');

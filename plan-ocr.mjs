@@ -15,7 +15,11 @@ export async function recognizePlan(source,{signal,onProgress=()=>{},load=()=>im
   await worker.setParameters({tessedit_pageseg_mode:'11',preserve_interword_spaces:'1'});stopped();
   const enlarged=document.createElement('canvas'),scale=Math.min(2,2400/Math.max(source.width,source.height));enlarged.width=Math.round(source.width*scale);enlarged.height=Math.round(source.height*scale);enlarged.getContext('2d').drawImage(source,0,0,enlarged.width,enlarged.height);
   const context=enlarged.getContext('2d');if(context.getImageData){const image=context.getImageData(0,0,enlarged.width,enlarged.height),clean=textOnlyImage(image);image.data.set(clean.data);context.putImageData(image,0,0);}
-  const {data}=await worker.recognize(enlarged,{}, {blocks:true,text:true});stopped();return ocrTokens(data,scale);
+  const {data}=await worker.recognize(enlarged,{}, {blocks:true,text:true});stopped();const cleanTokens=ocrTokens(data,scale);
+  onProgress('元画像の文字も照合しています…');context.drawImage(source,0,0,enlarged.width,enlarged.height);const raw=await worker.recognize(enlarged,{}, {blocks:true,text:true});stopped();const combined=[...cleanTokens,...ocrTokens(raw.data,scale).map(t=>({...t,line:'original-'+t.line}))];
+  // Overlapping crops give small Japanese labels their own recognition context.
+  if(Math.max(source.width,source.height)>800){let tile=0;for(const fy of [0,.4])for(const fx of [0,.4]){stopped();onProgress(`小さい文字を部分ごとに照合しています… ${++tile}/4`);const x=Math.round(source.width*fx),y=Math.round(source.height*fy),w=Math.min(source.width-x,Math.ceil(source.width*.6)),h=Math.min(source.height-y,Math.ceil(source.height*.6)),ratio=Math.min(3,1800/Math.max(w,h));enlarged.width=Math.round(w*ratio);enlarged.height=Math.round(h*ratio);context.drawImage(source,x,y,w,h,0,0,enlarged.width,enlarged.height);const part=await worker.recognize(enlarged,{}, {blocks:true,text:true});stopped();combined.push(...ocrTokens(part.data,ratio).map(t=>({...t,line:'tile'+tile+'-'+t.line,bbox:{x0:t.bbox.x0+x,x1:t.bbox.x1+x,y0:t.bbox.y0+y,y1:t.bbox.y1+y}})));}}
+  return combined;
  })()]);}catch(e){attempt++;throw e;}finally{ended=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);await worker?.terminate().catch(()=>{});}
 }
 export async function pdfPlanTokens(page,viewport){

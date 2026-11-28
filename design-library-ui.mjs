@@ -1,4 +1,4 @@
-import {readLibrary,saveToLibrary,renameInLibrary,deleteFromLibrary,restoreDeletedDesign} from './design-library.mjs?v=20261123-semantic2';
+import {readLibrary,saveToLibrary,renameInLibrary,deleteFromLibrary,restoreDeletedDesign} from './design-library.mjs?v=20261128-rooms';
 export function setupDesignLibrary({getDesign,onLoad,onDownload,onOpen,onClose,notify,getStorage=()=>localStorage}){
  const $=s=>document.querySelector(s),dialog=$('#libraryDialog'),select=$('#librarySelect');
  const status=t=>{$('#libraryStatus').textContent=t;};

@@ -1,20 +1,26 @@
-import {setupSemanticReview} from './plan-semantic-ui.mjs?v=20261123-build-access';
-import {pdfPlanTokens} from './plan-ocr.mjs?v=20261123-build-access';
+import {setupTopologyReview} from './plan-topology-ui.mjs?v=20261128-rooms';
+import {setupSemanticReview} from './plan-semantic-ui.mjs?v=20261128-rooms';
+import {pdfPlanTokens} from './plan-ocr.mjs?v=20261128-rooms';
 import {cadVectors,cadPreview,clipCADLines} from './cad-core.mjs';
 import {readCAD} from './cad-runtime.mjs';
 import {chooseFloorPlanPage} from './plan-pages.mjs';
-import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261123-build-access';
-import {insertPlanDoor,detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261123-build-access';
+import {reviewRect,excludePlanRegions,cropReviewRegions} from './plan-review.mjs?v=20261128-rooms';
+import {insertPlanDoor,detectWalls,makePlanDesign,closestLine,openParallelWalls,planEditorSnapshot,planSegmentMetres,rasterReviewNeeded} from './plan-core.mjs?v=20261128-rooms';
 const PDF_BASE='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/';
 let pdfModuleRetry=0;
 export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadCAD=readCAD,readOCR,loadPDF=()=>import(PDF_BASE+'build/pdf.mjs'+(pdfModuleRetry?'?retry='+pdfModuleRetry:''))}){
  const $=s=>document.querySelector(s),dialog=$('#planDialog'),canvas=$('#planCanvas'),ctx=canvas.getContext('2d');
  const source=document.createElement('canvas'),sx=source.getContext('2d',{willReadFrequently:true});
  let lines=[],pending=null,pointer=null,pdf=null,pdfTask=null,renderTask=null,epoch=0,busy=false,undo=[],redo=[],hasSource=false,cad=null,cadAbort=null,cadDirty=false,zoom=1,loadingImage=null,imageURL=null,fromModel=false,sourceAspect=null,sourceWall='#e9e4d8',calibration=null,lastBuiltDesign=null,pendingSnapshot=null;
- let exclusions=[],exclusionPreview=null,semantic;
+ let roomsReviewed=false,reviewedPolygons='',needsRoomRebuild=false;
+ const outlineSignature=()=>JSON.stringify((semantic?.candidates()??[]).filter(c=>c.state!=='rejected'&&c.polygon).map(c=>c.polygon));
+ let exclusions=[],exclusionPreview=null,semantic,topology;
  const status=t=>{$('#planStatus').textContent=t;};
  function buildIssue(wallsOnly=false,automatic=false){
   if(busy&&!automatic||semantic?.busy)return '図面を読み取り中です。完了するまでお待ちください。';
+  if(needsRoomRebuild&&!wallsOnly)return '部屋の輪郭を変更しました。「確認した部屋の輪郭で壁を組み直す」で2Dを再確認・採用してください。';
+  if(semantic?.isDrawing)return '部屋の輪郭を指定中です。「輪郭を閉じる」か「輪郭の指定を取り消す」を選んでください。';
+  if(topology?.pending)return '壁の組み直しが確認待ちです。「この2D間取りを採用」または「取り消す」を選んでください。';
   if(exclusionPreview)return '線の除外が確認待ちです。「この範囲を除外」または「キャンセル」を選んでください。';
   if(cadDirty)return 'CAD設定を変更しています。「CAD設定を反映」を押してください。';
   if(!lines.length)return '壁の線がありません。図面データを取り込み、壁線を確認してください。';
@@ -32,7 +38,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   $('#planReviewPending').hidden=!semantic?.pending;$('#planReviewPending').disabled=locked;
   $('#planBuildWalls').hidden=!semantic?.pending;$('#planBuildWalls').disabled=!!buildIssue(true);
   $('#planBuildWallsNote').hidden=!semantic?.pending;
-  for(const id of ['planDoorSpan','planExclude','planShowOriginal','planQuickCrop','planStrongLines'])$('#'+id).disabled=locked||!ready;
+  for(const id of ['planExtent','planDoorSpan','planExclude','planShowOriginal','planQuickCrop','planStrongLines'])$('#'+id).disabled=locked||!ready;
   $('#planShowOriginal').disabled=locked||!ready||fromModel;
   $('#planApplyExclusion').disabled=locked||!exclusionPreview?.removed.length;
   $('#planDetect').disabled=locked||!ready||fromModel;
@@ -50,9 +56,9 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   if(zoom===1)viewport.scrollLeft=viewport.scrollTop=0;
   $('#planZoomValue').textContent=`${Math.round(zoom*100)}%`;controls();
  }
- const savedFields=['planName','planWidth','planHeight','planThickness','planRoof','planKnownLength','planThreshold','planMinLength','planThinLines','cadUnit','cadScale'];
- function snapshotEditor(){return {semantic:semantic.snapshot(),width:source.width,height:source.height,pixels:source.width>=8?sx.getImageData(0,0,source.width,source.height):null,lines:structuredClone(lines),exclusions:structuredClone(exclusions),undo:[...undo],redo:[...redo],calibration:calibration&&{...calibration},hasSource,cad,cadDirty,fromModel,sourceAspect,sourceWall,pdf,pdfTask,zoom,fields:Object.fromEntries(savedFields.map(id=>[id,$('#'+id).type==='checkbox'?$('#'+id).checked:$('#'+id).value])),sourceInfo:$('#planSourceInfo').textContent,cadHidden:$('#cadOptions').hidden,pageHidden:$('#planPageRow').hidden,pageOptions:[...$('#planPage').children].map(o=>({value:o.value,text:o.textContent})),pageValue:$('#planPage').value};}
- function restoreEditor(s){if(!s)return;source.width=s.width;source.height=s.height;semantic.restore(s.semantic);if(s.pixels)sx.putImageData(s.pixels,0,0);lines=s.lines;exclusions=s.exclusions;exclusionPreview=null;undo=s.undo;redo=s.redo;calibration=s.calibration;hasSource=s.hasSource;cad=s.cad;cadDirty=s.cadDirty;fromModel=s.fromModel;sourceAspect=s.sourceAspect;sourceWall=s.sourceWall;pdf=s.pdf;pdfTask=s.pdfTask;for(const [id,value] of Object.entries(s.fields)){const el=$('#'+id);if(el.type==='checkbox')el.checked=value;else el.value=value;}$('#planSourceInfo').textContent=s.sourceInfo;$('#cadOptions').hidden=s.cadHidden;$('#planPageRow').hidden=s.pageHidden;$('#planPage').replaceChildren();for(const o of s.pageOptions){const option=document.createElement('option');option.value=o.value;option.textContent=o.text;$('#planPage').append(option);}$('#planPage').value=s.pageValue;setZoom(s.zoom);draw();}
+ const savedFields=['planName','planWidth','planHeight','planThickness','planRoof','planKnownLength','planThreshold','planMinLength','planThinLines','planExtentWidth','planExtentDepth','cadUnit','cadScale'];
+ function snapshotEditor(){return {roomsReviewed,needsRoomRebuild,semantic:semantic.snapshot(),width:source.width,height:source.height,pixels:source.width>=8?sx.getImageData(0,0,source.width,source.height):null,lines:structuredClone(lines),exclusions:structuredClone(exclusions),undo:[...undo],redo:[...redo],calibration:calibration&&{...calibration},hasSource,cad,cadDirty,fromModel,sourceAspect,sourceWall,pdf,pdfTask,zoom,fields:Object.fromEntries(savedFields.map(id=>[id,$('#'+id).type==='checkbox'?$('#'+id).checked:$('#'+id).value])),sourceInfo:$('#planSourceInfo').textContent,cadHidden:$('#cadOptions').hidden,pageHidden:$('#planPageRow').hidden,pageOptions:[...$('#planPage').children].map(o=>({value:o.value,text:o.textContent})),pageValue:$('#planPage').value};}
+ function restoreEditor(s){if(!s)return;roomsReviewed=!!s.roomsReviewed;needsRoomRebuild=!!s.needsRoomRebuild;source.width=s.width;source.height=s.height;semantic.restore(s.semantic);reviewedPolygons=outlineSignature();if(s.pixels)sx.putImageData(s.pixels,0,0);lines=s.lines;exclusions=s.exclusions;exclusionPreview=null;undo=s.undo;redo=s.redo;calibration=s.calibration;hasSource=s.hasSource;cad=s.cad;cadDirty=s.cadDirty;fromModel=s.fromModel;sourceAspect=s.sourceAspect;sourceWall=s.sourceWall;pdf=s.pdf;pdfTask=s.pdfTask;for(const [id,value] of Object.entries(s.fields)){const el=$('#'+id);if(el.type==='checkbox')el.checked=value;else el.value=value;}$('#planSourceInfo').textContent=s.sourceInfo;$('#cadOptions').hidden=s.cadHidden;$('#planPageRow').hidden=s.pageHidden;$('#planPage').replaceChildren();for(const o of s.pageOptions){const option=document.createElement('option');option.value=o.value;option.textContent=o.text;$('#planPage').append(option);}$('#planPage').value=s.pageValue;setZoom(s.zoom);draw();}
  function cancelRead(){
   if(!busy)return;
   ++epoch;cadAbort?.abort();cadAbort=null;
@@ -63,17 +69,20 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   status('図面の読み取りを中止しました。もう一度ファイルを選べます。');
  }
  function exclude(candidate,regions){const scale=(+$('#planWidth').value||10)/source.width,vertical=(+$('#planWidth').value||10)*(sourceAspect??source.height/source.width)/source.height;return excludePlanRegions(candidate,regions,{minLength:.031/Math.min(scale,vertical)});}
- function editState(){return JSON.stringify({lines,exclusions,semantic:semantic.snapshot()});}
- function restoreEditState(state){const parsed=JSON.parse(state);({lines,exclusions}=parsed);semantic.restore(parsed.semantic);pending=null;exclusionPreview=null;}
+ function editState(){return JSON.stringify({lines,exclusions,roomsReviewed,needsRoomRebuild,semantic:semantic.snapshot()});}
+ function restoreEditState(state){const parsed=JSON.parse(state);({lines,exclusions}=parsed);roomsReviewed=!!parsed.roomsReviewed;semantic.restore(parsed.semantic);needsRoomRebuild=!!parsed.needsRoomRebuild;reviewedPolygons=outlineSignature();pending=null;exclusionPreview=null;}
  function history(){undo.push(editState());if(undo.length>30)undo.shift();redo=[];semantic.invalidate();}
  function draw(){
+  if(roomsReviewed&&reviewedPolygons!==outlineSignature()){roomsReviewed=false;needsRoomRebuild=true;}
+  topology?.render();
   canvas.hidden=source.width<8;canvas.width=source.width;canvas.height=source.height;ctx.drawImage(source,0,0);ctx.lineWidth=Math.max(2,source.width/400);
   if(!$('#planShowOriginal').checked){
   semantic?.draw(ctx);
-  for(const l of exclusionPreview?.lines??lines){ctx.strokeStyle=l.kind==='door'?'#d07a13':l.kind==='window'?'#2283b4':'#e13447';ctx.beginPath();ctx.moveTo(l.x1,l.y1);ctx.lineTo(l.x2,l.y2);ctx.stroke();}
+  for(const l of topology?.preview??exclusionPreview?.lines??lines){ctx.strokeStyle=l.kind==='door'?'#d07a13':l.kind==='window'?'#2283b4':'#e13447';ctx.beginPath();ctx.moveTo(l.x1,l.y1);ctx.lineTo(l.x2,l.y2);ctx.stroke();}
   if(exclusionPreview){ctx.strokeStyle='#727b81';for(const l of exclusionPreview.removed){ctx.beginPath();ctx.moveTo(l.x1,l.y1);ctx.lineTo(l.x2,l.y2);ctx.stroke();}}
   for(const r of [...exclusions,...(exclusionPreview?[exclusionPreview.rect]:[])]){ctx.strokeStyle='#94631b';ctx.beginPath();ctx.moveTo(r.left,r.top);ctx.lineTo(r.right,r.top);ctx.lineTo(r.right,r.bottom);ctx.lineTo(r.left,r.bottom);ctx.lineTo(r.left,r.top);ctx.stroke();}
   }
+  topology?.draw(ctx);
   if(pending){ctx.fillStyle='#305cda';ctx.beginPath();ctx.arc(pending.x,pending.y,6,0,Math.PI*2);ctx.fill();}
   $('#planCount').textContent=`検出・編集済み：${lines.length} 本（赤：壁／橙：出入口／青：窓）${pending?' ／ 1点目を選択しました。もう一方の点をタップしてください。':''}`;
   $('#planReviewTools').hidden=fromModel||!!cad||!rasterReviewNeeded(lines);
@@ -83,7 +92,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   const width=+$('#planWidth').value,depth=width*(sourceAspect??source.height/source.width);$('#planDimensions').textContent=source.width>=8&&Number.isFinite(width)&&Number.isFinite(depth)?`図面全体：幅 ${width.toFixed(3)} m × 奥行 ${depth.toFixed(3)} m`:'';
   controls();semantic?.render();
  }
- function clearEdits(){semantic?.reset();lines=[];undo=[];redo=[];pending=null;pointer=null;calibration=null;exclusions=[];exclusionPreview=null;$('#planShowOriginal').checked=false;}
+ function clearEdits(){roomsReviewed=false;needsRoomRebuild=false;reviewedPolygons='';topology?.reset();semantic?.reset();lines=[];undo=[];redo=[];pending=null;pointer=null;calibration=null;exclusions=[];exclusionPreview=null;$('#planShowOriginal').checked=false;}
  function safeTool(){pending=null;pointer=null;exclusionPreview=null;$('#planTool').value='pan';canvas.style.touchAction='pan-x pan-y';canvas.style.cursor='grab';}
  function applyCalibration(){
   if(!calibration)return;
@@ -95,7 +104,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   if(fromModel){status('この編集は3Dの壁を直接扱います。再解析は不要です。');return;}
   if(cad){applyCAD();return;}
   const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:$('#planThinLines').checked?1:2});
-  history();lines=exclude(candidate,exclusions).lines;pending=null;exclusionPreview=null;draw();status(rasterReviewNeeded(lines)?`${lines.length}本の線を検出しました。寸法線や家具が混ざっている可能性があるため、自動3D化を止めました。「建物だけ切り抜く」で建物の対角2点を選び、不要な線を確認してください。`:(lines.length?'線を自動検出しました。寸法線や家具の線は削除し、実寸を設定して「修正を反映して3Dを表示」を押してください。':'壁の線が見つかりません。読み取り濃さを上げるか、「壁を追加」で補ってください。'));
+  history();roomsReviewed=false;lines=exclude(candidate,exclusions).lines;pending=null;exclusionPreview=null;draw();status(rasterReviewNeeded(lines)?`${lines.length}本の線を検出しました。寸法線や家具が混ざっている可能性があるため、自動3D化を止めました。「建物だけ切り抜く」で建物の対角2点を選び、不要な線を確認してください。`:(lines.length?'線を自動検出しました。寸法線や家具の線は削除し、実寸を設定して「修正を反映して3Dを表示」を押してください。':'壁の線が見つかりません。読み取り濃さを上げるか、「壁を追加」で補ってください。'));
  }
  function applyCAD(){
   try{
@@ -125,7 +134,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
    cad=null;cadDirty=false;cadAbort=null;fromModel=true;hasSource=true;sourceAspect=snapshot.design.depth/snapshot.design.width;sourceWall=snapshot.design.wall;
    $('#cadOptions').hidden=true;$('#planPageRow').hidden=true;clearEdits();safeTool();
    source.width=snapshot.pixelWidth;source.height=snapshot.pixelHeight;sx.fillStyle='white';sx.fillRect(0,0,source.width,source.height);lines=snapshot.lines;
-   semantic.loadAnnotations(snapshot.design.annotations);
+   semantic.loadAnnotations(snapshot.design.annotations);roomsReviewed=!!snapshot.design.roomsReviewed;needsRoomRebuild=false;reviewedPolygons=outlineSignature();
    for(const [id,key]of Object.entries({planName:'name',planWidth:'width',planHeight:'height',planThickness:'thickness',planRoof:'roof'}))$('#'+id).value=String(snapshot.design[key]);
    $('#planSourceInfo').textContent=`編集中：${snapshot.design.name||'名前なし'} の3Dの壁（原図の画像は含みません）`;
    setZoom(1);draw();status('表示中の3Dから壁・窓・出入口を読み込みました。修正後に「修正を反映して3Dを表示」を押してください。保存済みの案は上書きしません。');
@@ -135,7 +144,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  function buildPreview(automatic=false,wallsOnly=false){
   const issue=buildIssue(wallsOnly,automatic);if(issue){status(issue);return;}
   if(automatic&&($('#planReadLabels').checked||!dialog.open||!$('#planAutoPreview').checked||!lines.length||!cad&&!fromModel&&rasterReviewNeeded(lines)))return;
-  try{const d=makePlanDesign(lines,source.width,source.height,{name:$('#planName').value,width:+$('#planWidth').value,depth:sourceAspect===null?undefined:+$('#planWidth').value*sourceAspect,wall:sourceWall,height:+$('#planHeight').value,thickness:+$('#planThickness').value,roof:$('#planRoof').value,annotations:wallsOnly?[]:semantic.annotations()});
+  try{const d=makePlanDesign(lines,source.width,source.height,{name:$('#planName').value,width:+$('#planWidth').value,depth:sourceAspect===null?undefined:+$('#planWidth').value*sourceAspect,wall:sourceWall,height:+$('#planHeight').value,thickness:+$('#planThickness').value,roof:$('#planRoof').value,roomsReviewed:!wallsOnly&&roomsReviewed,annotations:wallsOnly?[]:semantic.annotations()});
    onBuild(d,{automatic});lastBuiltDesign=JSON.stringify(d);status('3Dを生成しました。ページ・壁線・実寸を確認し、必要に応じて修正して更新してください。');$('#openPlanImport').textContent='図面を選ぶ・読取結果を修正';setBusy(false);dialog.close();
   }catch(e){status('3D化できませんでした。壁線と寸法を修正してください。'+e.message);}
  }
@@ -173,8 +182,10 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  function point(e){const r=canvas.getBoundingClientRect();return {x:Math.max(0,Math.min(source.width-1,(e.clientX-r.left)*source.width/r.width)),y:Math.max(0,Math.min(source.height-1,(e.clientY-r.top)*source.height/r.height))};}
  function applyPoint(p){
   const tool=$('#planTool').value;if(tool==='pan'||$('#planShowOriginal').checked)return;
+  if(topology?.pending){status('壁の組み直しを採用するか取り消してから編集してください。');return;}
+  if(tool==='roomPolygon'){semantic.addPoint(p);return;}
   if(exclusionPreview){status('除外する線を確認し「この範囲を除外」か「キャンセル」を押してください。');return;}
-  if(tool==='semantic'||tool==='doorSpan'||tool==='exclude'||tool==='crop'||tool==='wall'||tool==='scale'){
+  if(tool==='extent'||tool==='semantic'||tool==='doorSpan'||tool==='exclude'||tool==='crop'||tool==='wall'||tool==='scale'){
    if(!pending){pending=p;draw();return;}
    const a=pending;pending=null;
    if(tool==='semantic'){semantic.setRect(a,p);draw();return;}
@@ -186,9 +197,10 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
     history();lines=next;draw();status(`幅 ${metres.toFixed(2)} m のドア・通り道を追加しました。3Dでは開いたドアとして表示します。開く向きは仮の表示です。「戻す」で取り消せます。`);return;
    }
    if(tool==='exclude'){const rect=reviewRect(a,p);exclusionPreview={rect,...exclude(lines,[rect])};$('#planShowOriginal').checked=false;draw();status(exclusionPreview.removed.length?'灰色の線が除外対象です。実際の壁は囲まないでください。確認後に反映できます。':'この範囲に除外する壁線はありません。窓と出入口は保持します。');$('#planExclusionReview').scrollIntoView?.({block:'nearest',behavior:'instant'});return;}
-   if(tool==='crop'){
+   if(tool==='crop'||tool==='extent'){
     const x=Math.floor(Math.min(a.x,p.x)),y=Math.floor(Math.min(a.y,p.y)),w=Math.floor(Math.abs(a.x-p.x)),h=Math.floor(Math.abs(a.y-p.y));if(w<30||h<30)throw Error('切り抜く範囲を広げてください。');
-    const semantics=semantic.snapshot();const pixels=sx.getImageData(x,y,w,h);const previousWidth=source.width,previousHeight=source.height,keepScale=!!cad||fromModel||!!calibration;if(sourceAspect!==null)sourceAspect*=h/previousHeight*previousWidth/w;source.width=w;source.height=h;sx.putImageData(pixels,0,0);$('#planWidth').value=(+$('#planWidth').value*(keepScale?w/previousWidth:1)).toFixed(3);const cropped=clipCADLines(lines,x,y,w,h),croppedExclusions=cropReviewRegions(exclusions,x,y,w,h);clearEdits();semantic.restore(semantics);semantic.crop(x,y,w,h);lines=cropped;exclusions=croppedExclusions;safeTool();draw();status('編集した壁・開口部・除外範囲を保持して切り抜きました。'+(rasterReviewNeeded(lines)&&!cad&&!fromModel?'まだ線が多いため「線幅で絞る」を試し、赤い線を確認してください。':'赤い壁線と図面の横幅を実寸に合わせてください。')+'元に戻すには元の図面か表示中の3Dから読み直してください。');return;
+    const extentWidth=+$('#planExtentWidth').value,extentDepth=+$('#planExtentDepth').value;if(tool==='extent'&&(!Number.isFinite(extentWidth)||!Number.isFinite(extentDepth)||extentWidth<1||extentWidth>60||extentDepth<1||extentDepth>60))throw Error('建物の幅・奥行を1〜60mで入力してください。');
+    const semantics=semantic.snapshot();const pixels=sx.getImageData(x,y,w,h);const previousWidth=source.width,previousHeight=source.height,keepScale=!!cad||fromModel||!!calibration;if(sourceAspect!==null)sourceAspect*=h/previousHeight*previousWidth/w;source.width=w;source.height=h;sx.putImageData(pixels,0,0);$('#planWidth').value=(+$('#planWidth').value*(keepScale?w/previousWidth:1)).toFixed(3);const cropped=clipCADLines(lines,x,y,w,h),croppedExclusions=cropReviewRegions(exclusions,x,y,w,h);clearEdits();semantic.restore(semantics);semantic.crop(x,y,w,h);if(tool==='extent'){$('#planWidth').value=String(extentWidth);sourceAspect=extentDepth/extentWidth;}lines=cropped;exclusions=croppedExclusions;safeTool();draw();status('編集した壁・開口部・除外範囲を保持して切り抜きました。'+(rasterReviewNeeded(lines)&&!cad&&!fromModel?'まだ線が多いため「線幅で絞る」を試し、赤い線を確認してください。':'赤い壁線と図面の横幅を実寸に合わせてください。')+'元に戻すには元の図面か表示中の3Dから読み直してください。');return;
    }
    if(tool==='scale'){const length=Math.hypot(a.x-p.x,a.y-p.y),unitLength=planSegmentMetres(a,p,source.width,source.height,1,sourceAspect??source.height/source.width);if(length<10||!Number.isFinite(unitLength)||unitLength<=0)throw Error('既知の長さと2点を確認してください。');calibration={unitLength};applyCalibration();return;}
    if(Math.hypot(a.x-p.x,a.y-p.y)<6)throw Error('壁の線をもう少し長くしてください。');history();const horizontal=Math.abs(p.x-a.x)>=Math.abs(p.y-a.y);lines.push({x1:a.x,y1:a.y,x2:(cad||fromModel)?p.x:horizontal?p.x:a.x,y2:(cad||fromModel)?p.y:horizontal?a.y:p.y,kind:'wall'});
@@ -201,6 +213,8 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
   draw();status('編集しました。赤い線が実際の壁に合うように調整してください。');
  }
  semantic=setupSemanticReview({readOCR,getSource:()=>({canvas:source,width:source.width,height:source.height,canRead:source.width>=8&&!cad&&!fromModel&&!busy}),getLines:()=>lines,changed:()=>{draw();controls();},setTool:tool=>{$('#planTool').value=tool;$('#planTool').onchange();$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});},previewExclusion:rect=>{exclusionPreview={rect,...exclude(lines,[rect])};$('#planShowOriginal').checked=false;draw();$('#planExclusionReview').scrollIntoView?.({block:'nearest',behavior:'instant'});}});
+ topology=setupTopologyReview({getImage:()=>fromModel||cad?null:sx.getImageData(0,0,source.width,source.height),getState:()=>({lines,candidates:semantic.candidates(),scale:(+$('#planWidth').value||10)/source.width,scaleY:(+$('#planWidth').value||10)*(sourceAspect??source.height/source.width)/source.height,busy:busy||semantic.busy||semantic.isDrawing}),changed:draw,replaceLines:(next,{keepCandidates=false,opening}={})=>{if(busy||semantic.busy)return;const saved=semantic.snapshot();if(opening){const a={x:opening.x1,y:opening.y1},b={x:opening.x2,y:opening.y2};next=insertPlanDoor(lines,a,b,Math.max(3,(+$('#planThickness').value||.12)*source.width/(+$('#planWidth').value||10)*1.5));if(opening.kind==='window')next[next.length-1].kind='window';}history();lines=next;pending=null;exclusionPreview=null;if(keepCandidates){semantic.restore(saved);roomsReviewed=true;needsRoomRebuild=false;reviewedPolygons=outlineSignature();}draw();}});
+ $('#planExtent').onclick=()=>{if(!(+$('#planExtentWidth').value>=1&&+$('#planExtentWidth').value<=60&&+$('#planExtentDepth').value>=1&&+$('#planExtentDepth').value<=60)){status('先に建物の幅と奥行をm単位で入力してください。');return;}$('#planTool').value='extent';$('#planTool').onchange();status('入力した幅・奥行に対応する建物の左上と右下を選んでください。範囲外の寸法線・敷地線を除き、実寸を設定します。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});};
  canvas.addEventListener('pointerdown',e=>{if(busy||semantic.busy||pointer!==null||$('#planTool').value==='pan'||$('#planShowOriginal').checked)return;e.preventDefault();pointer={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
  canvas.addEventListener('pointerup',e=>{if(e.pointerId!==pointer?.id)return;const start=pointer;pointer=null;if(Math.hypot(e.clientX-start.x,e.clientY-start.y)>12)return;try{applyPoint(point(e));}catch(err){pending=null;draw();status(err.message);}});
  canvas.addEventListener('pointercancel',()=>{pointer=null;pending=null;draw();});
@@ -208,7 +222,7 @@ export function setupPlanImport({onBuild,onOpen,onClose,getDesign=()=>null,loadC
  $('#planFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';await load(file);};$('#planPage').onchange=()=>renderPage({auto:false});
  $('#planDetect').onclick=()=>{if(busy)return;try{detect();}catch(e){status(e.message);}};
  $('#planQuickCrop').onclick=()=>{$('#planTool').value='crop';$('#planTool').onchange();status('建物だけを囲むように、図面の左上と右下を順にタップしてください。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});};
- $('#planStrongLines').onclick=()=>{if(busy||source.width<8)return;try{const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:4});if(!candidate.length){status('太い線が見つかりません。元の赤い線を保持しました。');return;}history();lines=exclude(candidate,exclusions).lines;pending=null;exclusionPreview=null;draw();status(`線幅で ${lines.length} 本に絞りました。壁を認識した結果ではありません。家具が残ったり、必要な壁が消えたりするため、原図と照合してください。「戻す」で元に戻せます。`);}catch(e){status(e.message);}};
+ $('#planStrongLines').onclick=()=>{if(busy||source.width<8)return;try{const candidate=detectWalls(sx.getImageData(0,0,source.width,source.height),{threshold:+$('#planThreshold').value,minLength:+$('#planMinLength').value,merge:Math.max(2,Math.min(source.width,source.height)*.012),minStroke:4});if(!candidate.length){status('太い線が見つかりません。元の赤い線を保持しました。');return;}history();roomsReviewed=false;lines=exclude(candidate,exclusions).lines;pending=null;exclusionPreview=null;draw();status(`線幅で ${lines.length} 本に絞りました。壁を認識した結果ではありません。家具が残ったり、必要な壁が消えたりするため、原図と照合してください。「戻す」で元に戻せます。`);}catch(e){status(e.message);}};
  $('#planDoorSpan').onclick=()=>{if(busy||source.width<8)return;$('#planTool').value='doorSpan';$('#planTool').onchange();status('原図の出入口の両端を2点で選んでください。既存の壁にも、線が途切れている隙間にも追加できます。実寸を先に合わせてください。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});};
  $('#planExclude').onclick=()=>{if(busy||source.width<8)return;$('#planTool').value='exclude';$('#planTool').onchange();status('家具・畳・寸法線を囲む対角2点をタップしてください。壁と接する部分は小さく区切って選びます。すぐには削除されません。');$('#planViewport').scrollIntoView?.({block:'center',behavior:'instant'});};
  $('#planApplyExclusion').onclick=()=>{if(busy||!exclusionPreview?.removed.length)return;history();lines=exclusionPreview.lines;exclusions.push(exclusionPreview.rect);exclusionPreview=null;draw();status('選んだ範囲の線を除外しました。原図の画像・範囲外の線・窓・出入口は保持しています。続けて別の範囲を選ぶか「戻す」で取り消せます。');};

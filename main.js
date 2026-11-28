@@ -1,13 +1,13 @@
-import {semanticKinds} from './plan-semantic.mjs?v=20261123-build-access';
-import {planSpaces,spaceAt} from './plan-space.mjs?v=20261123-build-access';
-import {shareURL,designFromHash} from './share-codec.mjs?v=20261123-build-access';
-import {setupDesignLibrary} from './design-library-ui.mjs?v=20261123-build-access';
-import {setupPlanImport} from './plan-import.mjs?v=20261123-build-access';
-import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261123-build-access';
+import {semanticKinds} from './plan-semantic.mjs?v=20261128-rooms';
+import {planSpaces,spaceAt} from './plan-space.mjs?v=20261128-rooms';
+import {shareURL,designFromHash} from './share-codec.mjs?v=20261128-rooms';
+import {setupDesignLibrary} from './design-library-ui.mjs?v=20261128-rooms';
+import {setupPlanImport} from './plan-import.mjs?v=20261128-rooms';
+import {planSolids,planSpawn,planAllowed} from './plan-core.mjs?v=20261128-rooms';
 import {findWalkRoute} from './route-core.mjs?v=20261114-route-clear';
 import * as T from 'three';
 import {bindJoystick,walkingVector} from './joystick.mjs?v=20261109-longer-walk';
-import {validateDesign,layoutRooms,slideMove,createDesignHistory,interiorStartRoom} from './house-core.mjs?v=20261123-build-access';
+import {validateDesign,layoutRooms,slideMove,createDesignHistory,interiorStartRoom} from './house-core.mjs?v=20261128-rooms';
 import {OrbitControls} from './vendor/OrbitControls.js';
 const $=s=>document.querySelector(s);
 let renderer;
@@ -82,7 +82,7 @@ function updateDesignUI(){
  $('#undoDesign').disabled=!designHistory.canUndo;$('#redoDesign').disabled=!designHistory.canRedo;
  $('#saveDesign').disabled=$('#exportDesign').disabled=!custom;$('#editCurrentPlan').disabled=custom?.d.version!==2;
  $('#designState').textContent=custom?'表示中の案を保存・書き出します。':'現在は最初の家を表示しています。';
- $('#modelNote').textContent=custom?.d.version===2?'図面の線から作った概略モデルです。床・屋根は矩形の仮形状。窓・出入口は手動指定、部屋名・階数・屋根形状の自動判定には未対応です。':custom?'入力条件から作成した平屋の概略モデルです。寸法・家具・設備は参考イメージです。':'提供図面をもとにした簡易3Dモデルです。図面で確認できた家具を簡略表示しています。形・寸法・質感は参考です。';
+ $('#modelNote').textContent=custom?.d.version===2?'原図と確認した間取りから作る概略モデルです。部屋の輪郭で組み直した場合は床・天井もその形になります。出入口の種類・実寸は確認が必要です。階段の段差・屋根形状は自動復元しません。':custom?'入力条件から作成した平屋の概略モデルです。寸法・家具・設備は参考イメージです。':'提供図面をもとにした簡易3Dモデルです。図面で確認できた家具を簡略表示しています。形・寸法・質感は参考です。';
  const summary=$('#areaSummary');summary.replaceChildren();
  if(custom){const total=document.createElement('div');total.textContent=`${custom.d.version===2?'矩形の仮床面積':'概算面積'} ${(custom.d.width*custom.d.depth).toFixed(1)} m²`;summary.append(total);const list=document.createElement('ul');list.id='roomAreas';for(const r of custom.rooms){const item=document.createElement('li');item.textContent=`${r.name}：${((r.x2-r.x1)*(r.z2-r.z1)).toFixed(1)} m²`;list.append(item);}summary.append(list);const note=document.createElement('div');note.textContent='壁厚を差し引く前の参考値です。';summary.append(note);}
 }
@@ -114,7 +114,9 @@ function buildPlanDesign(d,record=true){
  custom={d,space,root,low,high,top,lid,names,owned,wallMaterial,solids:planSolids(d),rooms:[],views:{planWalk:{p:[spawn.x,F+1.58,spawn.z],yaw:0,name:'図面の室内'}}};passWalls=false;
  const b=(w,h,dep,x,y,z,m,g=low)=>box(w,h,dep,x,y,z,m,g);
  const bounds=space.bounds,fw=bounds.maxX-bounds.minX,fd=bounds.maxZ-bounds.minZ,fx=(bounds.minX+bounds.maxX)/2,fz=(bounds.minZ+bounds.maxZ)/2;
- b(fw,.4,fd,fx,.2,fz,concrete);b(fw,.16,fd,fx,F-.08,fz,floorMat);b(130,.1,130,0,-.12,0,concrete);
+ const outlines=[...new Map((d.roomsReviewed?d.annotations:[]).filter(a=>a.polygon).map(a=>[JSON.stringify(a.polygon),a.polygon])).values()];
+ const polygonMesh=(p,y,material,group)=>{const shape=new T.Shape();shape.moveTo((p[0].x-.5)*d.width,-(p[0].y-.5)*d.depth);for(const a of p.slice(1))shape.lineTo((a.x-.5)*d.width,-(a.y-.5)*d.depth);shape.closePath();const mesh=new T.Mesh(new T.ShapeGeometry(shape),material);mesh.rotation.x=-Math.PI/2;mesh.position.y=y;mesh.receiveShadow=true;group.add(mesh);return mesh;};
+ if(outlines.length){for(const p of outlines)polygonMesh(p,F,floorMat,low);}else{b(fw,.4,fd,fx,.2,fz,concrete);b(fw,.16,fd,fx,F-.08,fz,floorMat);}b(130,.1,130,0,-.12,0,concrete);
  for(const w of d.walls){const length=Math.hypot(w.x2-w.x1,w.z2-w.z1),x=(w.x1+w.x2)/2,z=(w.z1+w.z2)/2,angle=-Math.atan2(w.z2-w.z1,w.x2-w.x1);
   const wb=(h,depth,y,m,g)=>{const mesh=b(length,h,depth,x,y,z,m,g);mesh.rotation.y=angle;};
   const piece=(lo,hi)=>{for(const [a,e,g] of [[lo,Math.min(hi,1.15),low],[Math.max(lo,1.15),hi,high]])if(e>a)wb(e-a,d.thickness,F+(a+e)/2,wallMaterial,g);};
@@ -132,12 +134,12 @@ function buildPlanDesign(d,record=true){
   if(w.kind!=='door')wb(.075,d.thickness+.025,F+.0375,white,low);
  }
  if(d.roof==='flat')b(fw+.3,.1,fd+.3,fx,F+d.height+.1,fz,roofmat,top);
- b(fw,.07,fd,fx,F+d.height,fz,white,lid);
+ if(outlines.length){const ceiling=white.clone();ceiling.side=T.DoubleSide;owned.add(ceiling);for(const p of outlines)polygonMesh(p,F+d.height,ceiling,lid);}else b(fw,.07,fd,fx,F+d.height,fz,white,lid);
  $('#spaceChoices').replaceChildren();$('.room').replaceChildren();
  const roomName=(r,i)=>{const names=(d.annotations??[]).filter(a=>spaceAt(space,(a.x-.5)*d.width,(a.y-.5)*d.depth)===i).map(a=>a.name);return [...new Set(names)].join('・')||'空間'+(i+1);};
  const choices=space.rooms.length?space.rooms.map((r,i)=>({id:i?'planRoom'+i:'planWalk',r,name:roomName(r,i)})):[{id:'planWalk',r:{point:spawn},name:'室内位置を確認'}];
  for(const {id,r,name} of choices){custom.views[id]={p:[r.point.x,F+1.58,r.point.z],yaw:r.yaw??0,name};const button=document.createElement('button');button.dataset.room=id;button.textContent=name+'へ入る';button.onclick=()=>enter(id);$('.room').append(button);const pick=document.createElement('button');pick.textContent=name+'へ入る';pick.onclick=()=>{$('#spaceDialog').close();enter(id);};$('#spaceChoices').append(pick);}
- for(const a of d.annotations??[]){const x=(a.x-.5)*d.width,z=(a.y-.5)*d.depth;const c=document.createElement('canvas');c.width=512;c.height=100;const cx=c.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,512,100);cx.fillStyle=semanticKinds[a.kind].color;cx.font='36px sans-serif';cx.textAlign='center';cx.fillText(a.name,256,65);const tx=new T.CanvasTexture(c),material=new T.SpriteMaterial({map:tx,depthTest:false});owned.add(material);const sp=new T.Sprite(material);sp.position.set(x,F+1.25,z);sp.scale.set(1.7,.34,1);names.add(sp);const tint=new T.MeshBasicMaterial({color:semanticKinds[a.kind].color,transparent:true,opacity:.22,depthWrite:false});owned.add(tint);b((a.right-a.left)*d.width,.008,(a.bottom-a.top)*d.depth,((a.left+a.right)/2-.5)*d.width,F+.008,((a.top+a.bottom)/2-.5)*d.depth,tint,names);}
+ for(const a of d.annotations??[]){const x=(a.x-.5)*d.width,z=(a.y-.5)*d.depth;const c=document.createElement('canvas');c.width=512;c.height=100;const cx=c.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,512,100);cx.fillStyle=semanticKinds[a.kind].color;cx.font='36px sans-serif';cx.textAlign='center';cx.fillText(a.name,256,65);const tx=new T.CanvasTexture(c),material=new T.SpriteMaterial({map:tx,depthTest:false});owned.add(material);const sp=new T.Sprite(material);sp.position.set(x,F+1.25,z);sp.scale.set(1.7,.34,1);names.add(sp);const tint=new T.MeshBasicMaterial({color:semanticKinds[a.kind].color,transparent:true,opacity:.22,depthWrite:false});owned.add(tint);if(a.polygon)polygonMesh(a.polygon,F+.008,tint,names);else b((a.right-a.left)*d.width,.008,(a.bottom-a.top)*d.depth,((a.left+a.right)/2-.5)*d.width,F+.008,((a.top+a.bottom)/2-.5)*d.depth,tint,names);}
  custom.fillLight=new T.PointLight(0xfff8ee,1.5,Math.max(fw,fd)*2,2);custom.fillLight.position.set(spawn.x,F+d.height-.25,spawn.z);root.add(custom.fillLight);
  if(!space.rooms.length)showToast('壁で囲まれた部屋を確認できません。間取りの床を選ぶか、壁と出入口を修正してください。');
  document.querySelector('header h1').textContent=d.name||'図面から作成';document.querySelector('header p').textContent=`図面モデル ${d.width.toFixed(1)} × ${d.depth.toFixed(1)} m`;

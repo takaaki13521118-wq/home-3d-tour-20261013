@@ -220,3 +220,24 @@ $('#planKnownLength').value='5';$('#planKnownLength').handlers.input();assert.eq
 $('#semanticAccept').onclick();assert.equal($('#planBuild').disabled,false);assert.equal($('#planBuildWalls').hidden,true);assert.equal($('#planBuildReason').hidden,true);
 $('#planBuild').onclick();assert.equal(result.annotations[0].name,'収納');
 console.log('PASS: bottom build reason, review navigation, walls-only preview, draft retention and geometry validation guards');
+
+// New room-first workflow: explicit extents, polygon editing, preview, undo and persistence.
+currentDesign=null;$('#planReadLabels').checked=false;
+await $('#planFile').onchange({target:{files:[file],value:'file'}});
+$('#planExtentWidth').value='10.920';$('#planExtentDepth').value='7.280';$('#planExtent').onclick();click(20,20);click(220,160);
+assert.equal(+$('#planWidth').value,10.92);assert.match($('#planDimensions').textContent,/7.280/);
+$('#semanticAdd').onclick();$('#semanticName').value='L字の居間';$('#semanticName').oninput();$('#semanticPolygon').onclick();
+for(const p of [[20,20],[220,20],[220,90],[120,90],[120,160],[20,160]])click(...p);
+assert.equal($('#planBuild').disabled,true);assert.match($('#planBuildReason').textContent,/輪郭を指定中/);
+$('#semanticUndoPoint').onclick();click(20,160);$('#semanticFinishCanvas').onclick();$('#semanticAccept').onclick();
+assert.equal($('#topologyRebuild').disabled,false);$('#topologyRebuild').onclick();assert.equal($('#topologyApply').hidden,false);assert.equal($('#planBuild').disabled,true);
+assert.match($('#topologyIssues').textContent,/出入口が未確認/);
+$('#topologyCancel').onclick();assert.equal($('#topologyApply').hidden,true);$('#topologyRebuild').onclick();$('#topologyApply').onclick();
+$('#planBuild').onclick();assert.equal(result.roomsReviewed,true);assert.equal(result.annotations[0].polygon.length,6);assert.equal(result.width,10.92);assert(Math.abs(result.depth-7.28)<1e-9);
+$('#planUndo').onclick();$('#planBuild').onclick();assert.equal(result.roomsReviewed,undefined);$('#planRedo').onclick();$('#planBuild').onclick();assert.equal(result.roomsReviewed,true);
+currentDesign=result;$('#editCurrentPlan').onclick();$('#planBuild').onclick();assert.equal(result.roomsReviewed,true);assert.equal(result.annotations[0].polygon.length,6);
+console.log('PASS: extent calibration, polygon correction, rebuild confirmation, connection warning, undo/redo and reviewed model re-edit');
+$('#openPlanImport').onclick();$('#semanticRect').onclick();click(30,30);click(200,140);$('#semanticAccept').onclick();
+assert.equal($('#planBuild').disabled,true);assert.match($('#planBuildReason').textContent,/輪郭を変更/);
+$('#topologyRebuild').onclick();$('#topologyApply').onclick();assert.equal($('#planBuild').disabled,false);$('#planBuild').onclick();assert.equal(result.roomsReviewed,true);
+console.log('PASS: changing a reviewed outline requires rebuilding walls before 3D, preventing mismatched floor and wall geometry');

@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import {traceRooms,polygonArea,inPolygon,checkPolygon,interiorPoint,wallsFromRooms,openingCandidates,roomConnections} from '../plan-topology.mjs';
+import {makePlanDesign,planAllowed,planSpawn,planSolids,planEditorSnapshot} from '../plan-core.mjs';
+import {approvedAnnotations,restoreAnnotations,suggestSpaces} from '../plan-semantic.mjs';
+import {encodePlanFragment,decodePlanFragment} from '../share-codec.mjs';
+import {findWalkRoute} from '../route-core.mjs';
+const lines=p=>p.map((a,i)=>({x1:a.x,y1:a.y,x2:p[(i+1)%p.length].x,y2:p[(i+1)%p.length].y,kind:'wall'}));
+const rect=(l,t,r,b)=>[{x:l,y:t},{x:r,y:t},{x:r,y:b},{x:l,y:b}];
+const lShape=[{x:10,y:10},{x:410,y:10},{x:410,y:210},{x:210,y:210},{x:210,y:410},{x:10,y:410}];
+let traced=traceRooms(lines(lShape),500,500);assert.equal(traced.length,1);assert.equal(traced[0].polygon.length,6);assert.equal(Math.abs(polygonArea(traced[0].polygon)),120000);assert(!inPolygon(traced[0].polygon,310,310));
+// Furniture is an internal island, never the outer boundary of the named room.
+traced=traceRooms([...lines(lShape),...lines(rect(40,40,90,90))],500,500);
+const outer=traced.find(r=>inPolygon(r.polygon,150,150));assert.equal(outer.holes.length,1);assert.equal(outer.polygon.length,6);
+assert.equal(traceRooms(lines(rect(0,0,500,500)),500,500).length,1,'cropped building on canvas boundary');
+assert.equal(traceRooms(lines(rect(10,10,400,400)).slice(1),500,500).length,0,'open outline is not invented');
+assert.throws(()=>checkPolygon([{x:0,y:0},{x:2,y:2},{x:2,y:0},{x:0,y:2}]));
+assert.throws(()=>checkPolygon([{x:0,y:0},{x:2,y:0},{x:1,y:0},{x:1,y:2}]));
+assert(inPolygon(lShape,...Object.values(interiorPoint(lShape))));
+const candidate=(name,polygon,point)=>({id:name,name,kind:'room',polygon,...(point??interiorPoint(polygon)),rect:{left:Math.min(...polygon.map(p=>p.x)),right:Math.max(...polygon.map(p=>p.x)),top:Math.min(...polygon.map(p=>p.y)),bottom:Math.max(...polygon.map(p=>p.y))},state:'accepted'});
+const hall=candidate('ホール',rect(10,10,210,410)),living=candidate('居間',rect(210,10,410,410)),kitchen={...living,name:'キッチン',x:310,y:90};
+const door={x1:210,y1:155,x2:210,y2:245,kind:'door'},window={x1:410,y1:100,x2:410,y2:200,kind:'window'};
+const walls=wallsFromRooms([hall,living,kitchen],[door,window]);assert.equal(walls.filter(l=>l.kind==='door').length,1);assert.equal(walls.filter(l=>l.kind==='window').length,1);assert.equal(walls.filter(l=>l.x1===210&&l.x2===210).length,3,'one shared wall split around door');
+const connections=roomConnections([hall,living,kitchen],walls,.01);assert.equal(connections.groups,2);assert.equal(connections.links.length,1);assert.equal(connections.issues.length,0);assert.match(connections.links[0].text,/居間・キッチン/);
+assert.throws(()=>wallsFromRooms([hall],[{...door,x1:300,x2:300}]),/輪郭から外れ/);
+const gap=openingCandidates(walls.filter(l=>l.kind==='wall'),.01);assert(gap.some(l=>l.x1===210&&l.x2===210));
+assert(!openingCandidates([...walls,{x1:210,y1:155,x2:210,y2:245,kind:'wall'}],.01).some(l=>l.x1===210&&l.x2===210));
+const annotations=approvedAnnotations([hall,living,kitchen],500,500);
+const d=makePlanDesign(walls,500,500,{width:5,annotations,roomsReviewed:true});
+assert.deepEqual(decodePlanFragment(encodePlanFragment(d)),d);
+assert.deepEqual(restoreAnnotations(d.annotations,500,500).map(c=>c.polygon),[hall,living,kitchen].map(c=>c.polygon));
+assert.equal(planEditorSnapshot(d).design.roomsReviewed,true);
+const solids=planSolids(d),allowed=(x,z)=>planAllowed(d,x,z,solids),spawn=planSpawn(d);assert(allowed(spawn.x,spawn.z));
+assert(allowed(-.4,-.5),'door midpoint is walkable');assert(!allowed(-.4,-1.5),'wall cannot be crossed');assert(!allowed(1.6,-1),'window is not walkable');assert(!allowed(2.3,2.3),'outside verified outlines is not walkable');
+const route=findWalkRoute({x:-1.4,z:-.5},{x:.6,z:-.5},{walkable:allowed,minX:-2.5,maxX:2.5,minZ:-2.5,maxZ:2.5});assert(route?.length>1,'walk through reviewed door');
+const concave=candidate('L字室',lShape);const ld=makePlanDesign(wallsFromRooms([concave]),500,500,{width:5,annotations:approvedAnnotations([concave],500,500),roomsReviewed:true});assert(!planAllowed(ld,.6,.6),'L-shaped recess is outside');assert(planAllowed(ld,-1,-1));
+console.log('PASS: L-shaped topology, furniture islands, missing boundaries, polygon validation, shared rooms, door/window review, reconstruction, persisted outlines and actual walk route');
+
+const {openingSymbolEvidence}=await import('../plan-topology.mjs');
+const arcImage={width:160,height:160,data:new Uint8ClampedArray(160*160*4).fill(255)};
+for(let i=0;i<=200;i++){const a=i/200*Math.PI/2,x=Math.round(30+80*Math.cos(a)),y=Math.round(30+80*Math.sin(a));arcImage.data.fill(0,(y*160+x)*4,(y*160+x)*4+3);}
+assert.match(openingSymbolEvidence(arcImage,{x1:30,y1:30,x2:110,y2:30}),/円弧/);assert.equal(openingSymbolEvidence({...arcImage,data:new Uint8ClampedArray(160*160*4).fill(255)},{x1:30,y1:30,x2:110,y2:30}),'壁の切れ目');
+assert(openingCandidates([{x1:100,y1:0,x2:100,y2:100,kind:'wall'},{x1:100,y1:150,x2:100,y2:300,kind:'wall'}],.01,.02).some(o=>o.width===1));
+console.log('PASS: quarter-circle evidence stays tentative and vertical opening dimensions respect calibrated aspect ratio');
